@@ -149,7 +149,7 @@ for num_trial = 1:params.Nsets
     % Start actual trials:
     % Generate the stimulus.
     [target,target_xy] = generate_stim(params, num_trial);
-    
+
     % Save to log.
     log.Alpha(num_trial) = params.vPresent(num_trial)*params.Alpha;
     log.Orientation(num_trial) = params.vOrient(num_trial)*...

@@ -16,7 +16,7 @@ global w
     params.cycle_length_px,'pixels per period','vertical',...
     params.vPhase(num_trial));
 
-grating = repmat(255*target_xy,1,1,3);
-target = Screen('MakeTexture',w,cat(3, grating, 255*mask));
+grating = repmat(255*Scale(target_xy),1,1,3);
+target = Screen('MakeTexture',w,cat(3, grating, 255*Scale(params.circleFilter)));
 
 
