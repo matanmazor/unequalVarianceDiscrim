@@ -132,8 +132,8 @@ for num_trial = 1:params.Nsets
                 Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes})
                 Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes})
             else
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical})
-                Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical})
+                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},45)
+                Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},45)
             end
             
               % because DrawText is not working :-(
@@ -152,8 +152,7 @@ for num_trial = 1:params.Nsets
     
     % Save to log.
     log.Alpha(num_trial) = params.vPresent(num_trial)*params.Alpha;
-    log.Orientation(num_trial) = params.vOrient(num_trial)*...
-        (1-params.vVertical(num_trial));
+    log.Orientation(num_trial) = params.vOrient(num_trial)*(1-params.vVertical);
     log.xymatrix{num_trial} = target_xy;
     log.detection(num_trial) = detection;
     
@@ -172,7 +171,7 @@ for num_trial = 1:params.Nsets
     while toc(global_clock)<params.onsets(num_trial)
         % Present the fixation cross.
 %         DrawFormattedText(w, '+','center','center');
-        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+        Screen('DrawTexture', w, params.crossTexture);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
     end
@@ -185,7 +184,7 @@ for num_trial = 1:params.Nsets
     while (GetSecs - tini)<params.display_time
         Screen('DrawTextures',w,target, [], [],params.vOrient(num_trial),...
             [], params.Alpha*params.vPresent(num_trial));
-        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+        Screen('DrawTexture', w, params.crossTexture);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
     end
@@ -198,7 +197,7 @@ for num_trial = 1:params.Nsets
             %the screen. The subject can respond during this time
             %nevertheless.
             if (GetSecs - tini)<params.display_time+0.2
-                Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+                Screen('DrawTexture', w, params.crossTexture);
 %               DrawFormattedText(w, '+','center','center');
             else
                 Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes}, ...
@@ -218,13 +217,13 @@ for num_trial = 1:params.Nsets
     else %discrimination
         while (GetSecs - tini)<params.display_time+params.time_to_respond
             if (GetSecs - tini)<params.display_time+0.2
-                Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+                Screen('DrawTexture', w, params.crossTexture);
 %               DrawFormattedText(w, '+','center','center');
             else
                 Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},...
-                    [],[],0.5+0.5*(response(2)==1))
+                    45,[],0.5+0.5*(response(2)==1))
                 Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},...
-                    [],[],0.5+0.5*(response(2)==0))
+                    45,[],0.5+0.5*(response(2)==0))
             end
             vbl=Screen('Flip', w);
             keysPressed = queryInput();

@@ -70,8 +70,8 @@ params.waitframes = 1;
 if params.practice || calibration
     
     params.Alpha = 0.07; %transparency
-    params.AngleSigma = 4.5; %variance of non-vertical Gabors
-    params.AngleMu = 4.5; % overall biad of non-vertical Gabors
+    params.AngleSigma = 5; %variance of non-vertical Gabors
+    params.AngleMu = 5; % overall biad of non-vertical Gabors
     
 elseif ~exist('old_params') 
     
@@ -126,8 +126,9 @@ else
 %         params.DisWg = old_params.params.DisWg(end);
 %     end
 %     
-        params.AngleSD = old_params.params.AngleSD(end);
+        params.AngleSigma = old_params.params.AngleSigma(end);
 
+    end
 end
 
 %% Visual properties
@@ -146,6 +147,7 @@ params.fixation_time = 0.8;
 params.display_time = 1/30;
 params.time_to_respond = 1.5;
 params.time_to_conf = 2.5;
+params.instruction_time = 5;
 
 %% Number of trials and blocks
 if params.practice
@@ -219,16 +221,24 @@ params.noTexture = Screen('MakeTexture',w,img);
 
 [img, ~, alpha] = imread(fullfile('textures','verticalLine.png'));
 img(:, :, 4) = alpha;
-params.verticalTexture = Screen('MakeTexture',w,img);
+params.vertTexture = Screen('MakeTexture',w,img);
 
 [img, ~, alpha] = imread(fullfile('textures','x.png'));
 img(:, :, 4) = alpha;
 params.xTexture = Screen('MakeTexture',w,img);
 
+[img, ~, alpha] = imread(fullfile('textures','cross.png'));
+img(:, :, 4) = alpha;
+params.crossTexture = Screen('MakeTexture',w,img);
+
+
 params.positions = {[params.center(1)-250, params.center(2)-50,...
                             params.center(1)-150, params.center(2)+50],...
              [params.center(1)+150, params.center(2)-50,...
                             params.center(1)+250, params.center(2)+50]};
+                        
+params.cross_position = [params.center(1)-10,params.center(2)-10,...
+                            params.center(1)+10, params.center(2)+10];
                         
 params.keys = {'2@','3#'};
 
@@ -246,8 +256,8 @@ if params.practice == 2 %practice detection
     
     params.onsets = cumsum(6*ones(params.Nsets));
     
-    params.vOrient = normrnd(params.AngleMu,params.AngleSD,params.Nsets,1);
-    
+    params.vOrient = normrnd(params.AngleMu,params.AngleSigma,params.Nsets,1);
+        
 elseif params.practice == 1 %practice discrimination
     
     params.vVertical = (1:params.Nsets)>params.Nsets/2;
@@ -260,7 +270,7 @@ elseif params.practice == 1 %practice discrimination
     
     params.onsets = cumsum(6*ones(params.Nsets));
     
-    params.vOrient = normrnd(params.AngleMu,params.AngleSD,params.Nsets,1);
+    params.vOrient = normrnd(params.AngleMu,params.AngleSigma,params.Nsets,1);
     
 else % true experimental session or calibration
     params.run_duration = 601.44; %seconds = 179 TRs of 3.36 seconds;
@@ -268,5 +278,8 @@ else % true experimental session or calibration
         params.vOrient] = ...
     get_trials_params(params);
 end
+
+% randomize phase of Gabor patches
+params.vPhase = rand(params.Nsets,1);
 
 end

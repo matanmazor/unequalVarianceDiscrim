@@ -36,7 +36,7 @@ for i=1:length(vTask)
     
 end
 
-vOrient = normrnd(params.AngleMu,params.AngleSD,params.Nsets,1);
+vOrient = normrnd(params.AngleMu,params.AngleSigma,params.Nsets,1);
 
 %% Randomize event timing
 
