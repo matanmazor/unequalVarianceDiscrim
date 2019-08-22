@@ -1,10 +1,13 @@
 function params = loadPars(w, rect, savestr, calibration)
-% LOADPARS load run/session parameters.
-% Strongly based on scripts from Zylberberg, A., Bartfeld, P., & Signman, M. (2012).
-%   The construction of confidence in percpetual decision.
-%   Frontiers in integrative neuroscience,6, 79.
+%{
+ LOADPARS load run/session parameters.
+ Heavily based on scripts from Zylberberg, A., Bartfeld, P., & Signman, M. (2012).
+  The construction of confidence in percpetual decision.
+   Frontiers in integrative neuroscience,6, 79.
 
-% Matan Mazor, 2018
+ Matan Mazor, 2018
+%}
+
 
 params.scanner_signal = KbName('5%');
 params.subj = savestr{1};
@@ -57,7 +60,7 @@ if ~params.practice
     subject_num = str2num(params.subj(1:2));
     serial_num = subject_num*100+num_session;
       % experimental randomization is a deterministic function of the
-      % contents of the protocol folder and the subject number. 
+      % contents of the protocol folder, subject number, and session number. 
       % read more here: 
       % https://medium.com/@mazormatan/cryptographic-preregistration-from-newton-to-fmri-df0968377bb2
       params.protocolSum = preRNG('protocolFolder.zip',serial_num);
@@ -65,16 +68,20 @@ end
 
 params.waitframes = 1; 
 if params.practice || calibration
-    params.DetWg = 0.075;
-    params.DisWg = 0.07;
-    params.AngleSD = 4.5;
+    
+    params.Alpha = 0.07; %transparency
+    params.AngleSigma = 4.5; %variance of non-vertical Gabors
+    params.AngleMu = 4.5; % overall biad of non-vertical Gabors
+    
 elseif ~exist('old_params') 
+    
     old_params = load(fullfile('data',strjoin({params.subj,'calibration.mat'},'_')));
-    params.DetWg = old_params.params.DetWg(end);
-    params.DisWg = old_params.params.DisWg(end);
-    params.AngleSD = old_params.params.AngleSD(end);
+    params.Alpha = old_params.params.Alpha(end); 
+    params.AngleSigma = old_params.params.AngleSigma(end); 
+    params.AngleMu = old_params.params.AngleMu(end);
+    
 else
-    % Monitor and update thw Wg parameter based on performance on the
+    % Monitor and update the Alpha and AngleMu parameter based on performance on the
     % previous run. Don't change unless performance was below 0.525 or above
     % 0.85, in which case multiply or divide by a factor of 0.85. These
     % numbers were chosen because the likelihood of reaching these levels
@@ -88,34 +95,37 @@ else
     end
     
     if nanmean(old_params.log.correct(find(old_params.log.detection)))<=lower_bound
-            params.DetWg = old_params.params.DetWg(end)/0.9;
+            params.Alpha = old_params.params.Alpha(end)/0.9;
+            params.AngleMu = old_params.params.AngleMu(end)*0.9;
     elseif nanmean(old_params.log.correct(find(old_params.log.detection)))>=upper_bound
-            params.DetWg = old_params.params.DetWg(end)*0.9;
+            params.Alpha = old_params.params.Alpha(end)*0.9;
+            params.AngleMu = old_params.params.AngleMu(end)/0.9;
     else
             params.DetWg = old_params.params.DetWg(end);
+            params.AngleMu = old_params.params.AngleMu(end);
     end
     
     if nanmean(old_params.log.correct(find(1-old_params.log.detection)))<=lower_bound
-        params.DisWg = old_params.params.DisWg(end)/0.9;        
+        params.AngleMu = params.AngleMu(end)/0.9;       
     elseif nanmean(old_params.log.correct(find(1-old_params.log.detection)))>=upper_bound
-        params.DisWg = old_params.params.DisWg(end)*0.9;
+        params.AngleMu = params.AngleMu(end)*0.9;  
     
-    elseif nanmean(old_params.log.correct(find(1-old_params.log.detection)))>=...
-            nanmean(old_params.log.correct(find(old_params.log.detection)))+...
-            (upper_bound-lower_bound)/2&& params.DetWg == old_params.params.DetWg(end)
-        params.DetWg = old_params.params.DetWg(end)/sqrt(0.9);
-        params.DisWg = old_params.params.DisWg(end)*sqrt(0.9);
-        
-     elseif nanmean(old_params.log.correct(find(1-old_params.log.detection)))<=...
-            nanmean(old_params.log.correct(find(old_params.log.detection)))-...
-            (upper_bound-lower_bound)/2&& params.DetWg == old_params.params.DetWg(end)
-        params.DetWg = old_params.params.DetWg(end)*sqrt(0.9);
-        params.DisWg = old_params.params.DisWg(end)/sqrt(0.9);
-    
-    else 
-        params.DisWg = old_params.params.DisWg(end);
-    end
-    
+%     elseif nanmean(old_params.log.correct(find(1-old_params.log.detection)))>=...
+%             nanmean(old_params.log.correct(find(old_params.log.detection)))+...
+%             (upper_bound-lower_bound)/2&& params.Alpha == old_params.params.Alpha(end)
+%         params.DetWg = old_params.params.DetWg(end)/sqrt(0.9);
+%         params.DisWg = old_params.params.DisWg(end)*sqrt(0.9);
+%         
+%      elseif nanmean(old_params.log.correct(find(1-old_params.log.detection)))<=...
+%             nanmean(old_params.log.correct(find(old_params.log.detection)))-...
+%             (upper_bound-lower_bound)/2&& params.DetWg == old_params.params.DetWg(end)
+%         params.DetWg = old_params.params.DetWg(end)*sqrt(0.9);
+%         params.DisWg = old_params.params.DisWg(end)/sqrt(0.9);
+%     
+%     else 
+%         params.DisWg = old_params.params.DisWg(end);
+%     end
+%     
         params.AngleSD = old_params.params.AngleSD(end);
 
 end
@@ -129,7 +139,6 @@ params.letter_size = 25;
 params.fix_color = [0 0 255];
 params.displace = 300;
 % Screen('TextFont',w,'Corbel');
-params.stimContrast = .9;
 
 
 %% Timing
@@ -144,14 +153,15 @@ if params.practice
     params.Nblocks = 1;
     params.calibration = 0;
 elseif calibration
-    params.calibration = 1;
     params.trialsPerBlock = 100;
     params.Nblocks = 2;
+    params.calibration = 1;
 else
-    params.calibration = 0;
     params.trialsPerBlock = 40;
     params.Nblocks = 2;
+    params.calibration = 0;
 end
+
 params.Nsets = params.trialsPerBlock*params.Nblocks;
 
 distance_from_monitor = 77; % cm
@@ -178,19 +188,18 @@ params.conf_diam_deg = 6;
 params.conf_width_px = round(params.conf_diam_deg/params.deg_per_px_width);
 params.conf_height_px = round(params.conf_diam_deg/params.deg_per_px_height);
 
-% circle filter
+% circle filter (to mask the Gabor patch)
 x = [1:params.stimulus_width_px] - median(1:params.stimulus_width_px);
 [xx yy] = meshgrid(x);
 params.stimRadii    = sqrt(xx.^2 + yy.^2);
 params.circleFilter = (params.stimRadii <= params.stimulus_width_px/2);
 
-params.annulus_diameter = 6.5; %degrees
-
+% coordinates of the centre of the screen.
 [params.center(1), params.center(2)] = RectCenter(rect);
 params.rect = rect;
 
-params.horiTexture = Screen('MakeTexture', w, imread(fullfile('textures','hori.png')));
-params.vertTexture = Screen('MakeTexture', w, imread(fullfile('textures','vert.png')));
+%% Load all Textures
+% I rendered some of the text as images because PTB is giving me hell
 
 [img, ~, alpha] = imread(fullfile('textures','weAreJustAboutToBegin.png'));
 img(:, :, 4) = alpha;
@@ -208,37 +217,56 @@ params.yesTexture = Screen('MakeTexture',w,img);
 img(:, :, 4) = alpha;
 params.noTexture = Screen('MakeTexture',w,img);
 
+[img, ~, alpha] = imread(fullfile('textures','verticalLine.png'));
+img(:, :, 4) = alpha;
+params.verticalTexture = Screen('MakeTexture',w,img);
 
+[img, ~, alpha] = imread(fullfile('textures','x.png'));
+img(:, :, 4) = alpha;
+params.xTexture = Screen('MakeTexture',w,img);
 
 params.positions = {[params.center(1)-250, params.center(2)-50,...
                             params.center(1)-150, params.center(2)+50],...
              [params.center(1)+150, params.center(2)-50,...
                             params.center(1)+250, params.center(2)+50]};
-
+                        
 params.keys = {'2@','3#'};
 
-% determine direction and Wg for every trial
+% determine orientation and alpha for every trial
+
 if params.practice == 2 %practice detection
-    % in the practice sessions there is no guarantee that the number of CW
-    % and CCW trials will be even. It is determined randomly for every
-    % practice session. 
-    params.vDirection = ones(params.Nsets,1)+ 2*binornd(1,0.5,params.Nsets,1);
-    params.vWg = binornd(1,0.5,params.Nsets,1);
+    
+    % in detection, samples are never vertical
+    params.vVertical = zeros(params.Nsets,1); 
+    
+    % only on half of the trials a stimulus is presented
+    params.vPresent = binornd(1,0.5,params.Nsets,1); 
+    
     params.vTask = [1, 1];
+    
     params.onsets = cumsum(6*ones(params.Nsets));
-    params.vPhase = rand(params.Nsets,1);
-    params.vOrient = normrnd(0,1,4,1);
+    
+    params.vOrient = normrnd(params.AngleMu,params.AngleSD,params.Nsets,1);
+    
 elseif params.practice == 1 %practice discrimination
-    params.vDirection = ones(params.Nsets,1)+ 2*binornd(1,0.5,params.Nsets,1);
-    params.vWg = ones(params.Nsets,1);
-    params.vTask = [0,0];
+    
+    params.vVertical = (1:params.Nsets)>params.Nsets/2;
+    params.vVertical = params.vVertical(randperm(params.Nsets));    
+    
+    % in discrimination, a stimulus is presented on all trials
+    params.vPresent = ones(params.Nsets,1);
+    
+    params.vTask = [0, 0];
+    
     params.onsets = cumsum(6*ones(params.Nsets));
-    params.vPhase = rand(params.Nsets,1);
-    params.vOrient = normrnd(0,1,4,1);
+    
+    params.vOrient = normrnd(params.AngleMu,params.AngleSD,params.Nsets,1);
+    
 else % true experimental session or calibration
     params.run_duration = 601.44; %seconds = 179 TRs of 3.36 seconds;
-    [params.vDirection, params.vWg, params.vTask, params.onsets,...
-        params.vPhase, params.vOrient] = ...
+    [params.vVertical, params.vPresent, params.vTask, params.onsets,...
+        params.vOrient] = ...
     get_trials_params(params);
 end
+
 end

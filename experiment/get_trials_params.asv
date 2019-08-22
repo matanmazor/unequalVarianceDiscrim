@@ -63,9 +63,13 @@ gitter_vec(1:Nsets/Nblocks:end) = gitter_vec(1:Nsets/Nblocks:end)+10;
 % now the vector of trial onsets is the serial accumulation of the gitter vec.
 vOnset = cumsum(gitter_vec(1:end-1));
 
+%randomize phase of gratings
+vPhase = rand(size(vWg));
+
+%randomize orientation
+vOrient = normrnd(0,1,size(vWg));
 
 if vOnset(end)-params.run_duration > eps && ~params.calibration
     error('the randomization procedure went wrong')
 end
-
 end

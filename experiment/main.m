@@ -1,26 +1,18 @@
-clear all
-version = '2018-08-14';
-% add path to the preRNG folder, to support cryptographic time-locking of
-% hypotheses and analysis plans. Can be downloaded/cloned from
-% github.com/matanmazor/prerng
-addpath('..\..\..\complete\preRNG\Matlab')
-% PsychDebugWindowConfiguration()
-
 %{
   fMRI experiment, run in the Wellcome Centre for Human Neuroimaging.
-  Code snnippets adapted from:6
-
-    Zylberberg, A., Bartfeld, P., & Signman, M. (2012).
-    The construction of confidence in percpetual decision.
-    Frontiers in integrative neuroscience,6, 79.
-
-  and from
-    Fleming, S. M., Maniscalco, B., Ko, Y., Amendi, N., Ro, T., & Lau, H.
-    (2015). Action-specific disruption of perceptual confidence.
-    Psychological science, 26(1), 89-98.
-
-  Matan Mazor, 2018
+  Matan Mazor, 2019
 %}
+
+clear all
+version = '2018-08-14';
+%{
+    add path to the preRNG folder, to support cryptographic time-locking of
+    hypotheses and analysis plans. Can be downloaded/cloned from
+    github.com/matanmazor/prerng
+%}
+
+addpath('..\..\..\complete\preRNG\Matlab')
+% PsychDebugWindowConfiguration()
 
 %global variables
 global log
@@ -41,7 +33,7 @@ default = {'999MaMa','0','0'}; % default filename
 savestr = inputdlg(prompt,dlg_title,num_lines,default);
 
 %set preferences and open screen
-Screen('Preference','SkipSyncTests', 1)
+% Screen('Preference','SkipSyncTests', 1)
 screens=Screen('Screens');
 screenNumber=max(screens);
 doublebuffer=1;
