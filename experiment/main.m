@@ -183,7 +183,8 @@ for num_trial = 1:params.Nsets
     log.events = [log.events; 0 toc(global_clock)];
     
     while (GetSecs - tini)<params.display_time
-        Screen('DrawTextures',w,target, [], [],params.vOrient(num_trial),...
+        Screen('DrawTextures',w,target, [], [],(1-params.vVertical(num_trial))...
+            *params.vOrient(num_trial),...
             [], params.Alpha*params.vPresent(num_trial));
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);

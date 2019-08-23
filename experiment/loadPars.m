@@ -2,8 +2,8 @@ function params = loadPars(w, rect, savestr, calibration)
 %{
  LOADPARS load run/session parameters.
  Heavily based on scripts from Zylberberg, A., Bartfeld, P., & Signman, M. (2012).
-  The construction of confidence in percpetual decision.
-   Frontiers in integrative neuroscience,6, 79.
+ The construction of confidence in percpetual decision.
+ Frontiers in integrative neuroscience,6, 79.
 
  Matan Mazor, 2018
 %}
@@ -70,8 +70,8 @@ params.waitframes = 1;
 if params.practice || calibration
     
     params.Alpha = 0.07; %transparency
-    params.AngleSigma = 5; %variance of non-vertical Gabors
-    params.AngleMu = 5; % overall biad of non-vertical Gabors
+    params.AngleSigma = 10; %variance of non-vertical Gabors
+    params.AngleMu = 0; % overall biad of non-vertical Gabors
     
 elseif ~exist('old_params') 
     
@@ -258,6 +258,8 @@ if params.practice == 2 %practice detection
     
     params.vOrient = normrnd(params.AngleMu,params.AngleSigma,params.Nsets,1);
         
+    params.vPhase = rand(params.Nsets,1);
+    
 elseif params.practice == 1 %practice discrimination
     
     params.vVertical = (1:params.Nsets)>params.Nsets/2;
@@ -272,14 +274,24 @@ elseif params.practice == 1 %practice discrimination
     
     params.vOrient = normrnd(params.AngleMu,params.AngleSigma,params.Nsets,1);
     
-else % true experimental session or calibration
+    params.vPhase = rand(params.Nsets,1);
+    
+elseif calibration 
+    
+    params.vVertical = [zeros(1000,1); binornd(1,0.5,1000,1)];
+    params.vPresent = [binornd(1,0.5,1000,1); ones(1000,1)];
+    params.vTasl = [1,0];
+    params.vOrient = normrnd(0,1,2000,1);
+    params.vPhase = rand(2000,1);
+    
+else% true experimental session 
     params.run_duration = 601.44; %seconds = 179 TRs of 3.36 seconds;
     [params.vVertical, params.vPresent, params.vTask, params.onsets,...
         params.vOrient] = ...
     get_trials_params(params);
-end
 
 % randomize phase of Gabor patches
 params.vPhase = rand(params.Nsets,1);
+end
 
 end

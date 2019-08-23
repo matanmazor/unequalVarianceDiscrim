@@ -1,26 +1,29 @@
+%{
+  Calibration for fMRI experiment, run in the Wellcome Centre for Human Neuroimaging.
+  Matan Mazor, 2019.
+  First calibrate Alpha on the detection task, and then calibrate
+  AngleMu on the discrimination task, using the fixed alpha value.
+%}
+
 clear all
 version = '2018-08-14';
+%{
+    add path to the preRNG folder, to support cryptographic time-locking of
+    hypotheses and analysis plans. Can be downloaded/cloned from
+    github.com/matanmazor/prerng
+%}
 
-% add path to the preRNG folder, to support cryptographic time-locking of 
-% hypotheses andanalysis plans. Can be downloaded/cloned from
-% github.com/matanmazor/prerng
-addpath('..\..\..\2018\preRNG\Matlab')
-
+addpath('..\..\..\complete\preRNG\Matlab')
 % PsychDebugWindowConfiguration()
 
 %global variables
 global log
 global params
-global w %psychtoolbox window
 global global_clock
-
-%necessary for the qeuryInput function
-global_clock = tic();
+global w %psychtoolbox window
 
 %name: name of subject. Should start with the subject number. The name of
 %the subject should be included in the data/subjects.mat file.
-%practice: enter 0.
-%scanning: enter 0.2
 prompt = {'Name: ', 'Practice: ', 'Scanning: '};
 dlg_title = 'Filename'; % title of the input dialog box
 num_lines = 1; % number of input lines
@@ -28,7 +31,7 @@ default = {'999MaMa','0','0'}; % default filename
 savestr = inputdlg(prompt,dlg_title,num_lines,default);
 
 %set preferences and open screen
-Screen('Preference','SkipSyncTests', 1)
+% Screen('Preference','SkipSyncTests', 1)
 screens=Screen('Screens');
 screenNumber=max(screens);
 doublebuffer=1;
@@ -38,10 +41,10 @@ doublebuffer=1;
 KbQueueCreate;
 KbQueueStart;
 
-[w, rect] = Screen('OpenWindow', screenNumber, 0,[], 32, doublebuffer+1);
+%Open window.
+[w, rect] = Screen('OpenWindow', screenNumber, [127,127,127],[], 32, doublebuffer+1);
 Screen(w,'TextSize',40)
-
-%load parameters
+%Load parameters (calibration is true)
 params = loadPars(w, rect, savestr, 1);
 
 KbName('UnifyKeyNames');
@@ -54,26 +57,34 @@ Priority(MaxPriority(w));
 % for drawing of smoothed points:
 Screen('BlendFunction', w, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-%MM: initialize decision log
+% Initialize log with NaNs where possible.
+log.confidence = nan(params.Nsets,1);
 log.resp = zeros(params.Nsets,2);
 log.detection = nan(params.Nsets,1);
-log.Wg = nan(params.Nsets,1);
+log.Alpha = nan(params.Nsets,1);
 log.correct = nan(params.Nsets,1);
-log.estimates = [];
 log.events = [];
+stack = [];
+
+step_size = 0.95; % this is actually more of a step factor
 
 %% WAIT FOR 5
 % Wait for the 6th volume to start the experiment.
+% The 2d sequence sends a 5 for every slice, so waiting for 48*5 fives
+% before starting the experiment.
 
+excludeVolumes = 5;
+slicesperVolume = 48;
+
+%initialize
 num_five = 0;
-
-while num_five<1
-    Screen('DrawText',w,'We are just about to start.',20,120,[255 255 255])
+while num_five<excludeVolumes*slicesperVolume
+    Screen('DrawTexture', w, params.waitTexture);
     vbl=Screen('Flip', w);
     [ ~, firstPress]= KbQueueCheck;
     if firstPress(params.scanner_signal)
         num_five = num_five+1;
-    elseif firstPress(KbName('0)'))
+    elseif firstPress(KbName('0)'))  %for debugging
         num_five = inf;
     elseif firstPress(KbName('ESCAPE'))
         Screen('CloseAll');
@@ -82,189 +93,310 @@ while num_five<1
     end
 end
 
-correct_count = 0; %for staircasing
 
-%% Strart the trials
-for num_trial = 1:params.Nsets
+%stop recording 5s from the scanner, because it seems to be too much for
+%the kbcheck function.
+DisableKeysForKbCheck(KbName('5%'));
+
+proceed = 1;
+num_trial = 0;
+alpha = 0.05;
+anglesigma = 40;
+
+global_clock = tic();
+
+while toc(global_clock)<params.instruction_time
     
-    %% for staircasing
-    % Reduce the step size after 20 trials
-    if mod(num_trial,params.trialsPerBlock)<20 && mod(num_trial,params.trialsPerBlock)<20~=0
-        step_size = 0.01;
-    else
-        step_size = 0.005;
-    end
+    Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes})
+    Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes})
     
-    %At the beinning of each block, do:
-    if mod(num_trial,round(params.trialsPerBlock))==1
-        
-        if ~params.practice
-            save(fullfile('data', params.filename),'params','log');
-        end
-        
-        %detection or not?
-        detection = params.vTask(ceil(num_trial/params.trialsPerBlock));
-        
-        if detection
-            params.Wg = params.DetWg(end);
-            Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes})
-            Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes})
-        else
-            params.Wg = params.DisWg(end);
-            Screen('DrawTexture', w, params.vertTexture, [], params.positions{2},45)
-            Screen('DrawTexture', w, params.horiTexture, [], params.positions{1},45)
-        end
-        DrawFormattedText(w, 'or','center','center');
-        DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
-        
-        vbl=Screen('Flip', w);
-        
-        instruction_clock = tic;
-        while toc(instruction_clock)<5
-            keysPressed = queryInput();
-        end
-    end
+    % because DrawText is not working :-(
+    % https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/579
+    Screen('DrawTexture', w, params.orTexture);
+    %             DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
     
-    % start trials:
-    % generate the stimulus.
-    target_xy = generate_stim(params, num_trial);
-    target = Screen('MakeTexture',w, target_xy);
+    vbl=Screen('Flip', w);
+    keysPressed = queryInput();
+end
+
+%% MAIN LOOP: detection
+while proceed
     
-    %save to log.
-    log.Wg(num_trial) = params.vWg(num_trial)*params.Wg;
-    log.direction(num_trial) = params.vDirection(num_trial);
+    num_trial = num_trial+1;
+    trial_clock = tic();
+    
+    % Restrat Queue
+    KbQueueStart;
+    
+    % Start actual trials:
+    % Generate the stimulus.
+    [target,target_xy] = generate_stim(params, num_trial);
+    
+    % Save to log.
+    log.Alpha(num_trial) = params.vPresent(num_trial)*alpha(end);
+    log.Orientation(num_trial) = params.vOrient(num_trial)*...
+        (1-params.vVertical(num_trial));
     log.xymatrix{num_trial} = target_xy;
-    log.detection(num_trial) = detection;
+    log.detection(num_trial) = 1;
+    
+    
+    while toc(trial_clock)<0.5
+        % Present a dot at the centre of the screen.
+        Screen('DrawDots', w, [0 0]', ...
+            params.fixation_diameter_px, [255 255 255]*0.4, params.center,1);
+        vbl=Screen('Flip', w);%initial flip
+        
+        keysPressed = queryInput();
+    end
     
     response = [nan nan];
     
-    % MM: fixation
-    
-    Screen('DrawDots', w, [0 0]', ...
-        params.fixation_diameter_px, [255 255 255]*0.4, params.center,1);
-    vbl=Screen('Flip', w);%initial flip
-    
-    % since timing is not an issue for the calibration phase, timing is
-    % always relative to the onset of a trial and not the onset of the run.
-    trial_clock = tic;
-    
-    % rest of 1 second
-    while toc(trial_clock)<1
-        keysPressed = queryInput();
-    end
-    
-    % present fixation cross for 0.5 second
     while toc(trial_clock)<1.5
-        DrawFormattedText(w, '+','center','center');
+        % Present the fixation cross.
+        %         DrawFormattedText(w, '+','center','center');
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
     end
     
+    % Present the stimulus.
+    tini = GetSecs;
+    % The onset of the stimulus is encoded in the log file as '0'.
+    log.events = [log.events; 0 toc(global_clock)];
     
-    %present stimulus
-    while toc(trial_clock)<1.5+params.display_time
-        Screen('DrawTextures',w,target, [], [], 45);
-        vbl=Screen('Flip', w);
-    end
-    
-    % wait for response: present cross
-    while toc(trial_clock) <params.display_time+1.7
-        DrawFormattedText(w, '+','center','center');
+    while (GetSecs - tini)<params.display_time
+        Screen('DrawTextures',w,target, [], [],params.AngleMu+anglesigma(end)*...
+            params.vOrient(num_trial),...
+            [], alpha(end)*params.vPresent(num_trial));
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
-        if detection
-            if keysPressed(KbName(params.keys{params.yes}))
-                response = [toc(trial_clock) 1];
-            elseif keysPressed(KbName(params.keys{3-params.yes}))
-                response = [toc(trial_clock) 0];
-            end
+    end
+    
+    %% Wait for response
+    while (GetSecs - tini)<params.display_time+params.time_to_respond
+        
+        %During the first 200 milliseconds a fixation cross appears on
+        %the screen. The subject can respond during this time
+        %nevertheless.
+        if (GetSecs - tini)<params.display_time+0.2
+            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+            %               DrawFormattedText(w, '+','center','center');
         else
-            if keysPressed(KbName(params.keys{params.vertical}))
-                response = [toc(trial_clock) 1];
-            elseif keysPressed(KbName(params.keys{3-params.vertical}))
-                response = [toc(trial_clock) 0];
-            end
-        end
-    end
-    
-    % wait for response: present response choices.
-    if detection
-        while toc(trial_clock) < params.display_time+params.time_to_respond+1.2
             Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes}, ...
                 [],[], 0.5+0.5*(response(2)==1))
             Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes},...
                 [],[], 0.5+0.5*(response(2)==0))
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.yes}))
-                response = [toc(trial_clock) 1];
-            elseif keysPressed(KbName(params.keys{3-params.yes}))
-                response = [toc(trial_clock) 0];
-            end
         end
-        
-    else %discrimination
-        while toc(trial_clock)<params.display_time+params.time_to_respond+1.2
-            Screen('DrawTexture', w, params.vertTexture, [], params.positions{2},...
-                45,[],0.5+0.5*(response(2)==1))
-            Screen('DrawTexture', w, params.horiTexture, [], params.positions{1},...
-                45,[],0.5+0.5*(response(2)==3))
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{2}))
-                response = [toc(trial_clock) 1];
-            elseif keysPressed(KbName(params.keys{1}))
-                response = [toc(trial_clock) 3];
-            end
+        vbl=Screen('Flip', w);
+        keysPressed = queryInput();
+        if keysPressed(KbName(params.keys{params.yes}))
+            response = [GetSecs-tini 1];
+        elseif keysPressed(KbName(params.keys{3-params.yes}))
+            response = [GetSecs-tini 0];
         end
     end
-    log.resp(num_trial,:) = response;    
     
-    % MM: check if the response was accurate or not
-    if detection
-        if log.resp(num_trial,2)== sign(params.vWg(num_trial))
-            log.correct(num_trial) = 1;
-        else
-            log.correct(num_trial) = 0;
-        end
+   
+    % Write to log.
+    log.resp(num_trial,:) = response;
+    log.stimTime{num_trial} = vbl;
+    if keysPressed(KbName('ESCAPE'))
+        Screen('CloseAll');
+    end
+    
+    % Check if the response was accurate or not
+    if log.resp(num_trial,2)== sign(params.vPresent(num_trial))
+        log.correct(num_trial) = 1;
+        stack(end+1) = 1;
     else
-        if log.resp(num_trial,2) == params.vDirection(num_trial)
-            log.correct(num_trial) = 1;
-        else
-            log.correct(num_trial) = 0;
-        end
+        log.correct(num_trial) = 0;
+        stack(end+1) = 0;
     end
     
-    % end of decision phase
-    % monitor and update coherence levels
-    if mod(num_trial, 10)==0
-        if nanmean(log.correct(num_trial-9:num_trial))<0.6
-            params.Wg = params.Wg+step_size;
-        elseif nanmean(log.correct(num_trial-9:num_trial))>0.8
-            params.Wg = params.Wg-step_size;
-        end
-        if detection
-            params.DetWg = [params.DetWg; params.Wg];
-        else
-            params.DisWg = [params.DisWg; params.Wg];
+    %1up2down
+    if stack(end) == 0
+        alpha(end+1) = alpha(end)/step_size;
+        stack = [];
+    elseif numel(stack)==2
+        alpha(end+1) = alpha(end)*step_size;
+        stack = [];
+    else
+        alpha(end+1) = alpha(end);
+    end
+    
+    if num_trial>=60 && mod(num_trial,20)==0
+        
+        last_20 = nanmean(log.correct(num_trial-19:num_trial));
+        lastlast_20 = nanmean(log.correct(num_trial-39:num_trial-20));
+
+        if all([last_20,lastlast_20]<=0.75) && all([last_20,lastlast_20]>=0.67)
+            proceed = 0
+            params.Alpha = 2^(mean(log2(alpha(num_trial-39:num_trial))));
         end
     end
+
 end
 
+global_clock = tic();
 
-%% write to log
+while toc(global_clock)<params.instruction_time
+    
+    Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical})
+    Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical})
+    
+    % because DrawText is not working :-(
+    % https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/579
+    Screen('DrawTexture', w, params.orTexture);
+    %             DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
+    
+    vbl=Screen('Flip', w);
+    keysPressed = queryInput();
 
-log.date = date;
-log.filename = params.filename;
-log.version = version;
-save(fullfile('data', params.filename),'params','log');
+end
 
-if ~params.scanning
-    load gong.mat;
-    soundsc(y);
+num_trial = 1000;
+proceed = 1;
+
+%% MAIN LOOP: discrimination
+while proceed
+    
+    num_trial = num_trial+1;
+    trial_clock = tic();
+    
+    % Restrat Queue
+    KbQueueStart;
+    
+    % Start actual trials:
+    % Generate the stimulus.
+    [target,target_xy] = generate_stim(params, num_trial);
+    
+    % Save to log.
+    log.Alpha(num_trial) = params.vPresent(num_trial)*alpha(end);
+    log.Orientation(num_trial) = params.vOrient(num_trial)*...
+        (1-params.vVertical(num_trial));
+    log.xymatrix{num_trial} = target_xy;
+    log.detection(num_trial) = 0;
+    
+    
+    while toc(trial_clock)<0.5
+        % Present a dot at the centre of the screen.
+        Screen('DrawDots', w, [0 0]', ...
+            params.fixation_diameter_px, [255 255 255]*0.4, params.center,1);
+        vbl=Screen('Flip', w);%initial flip
+        
+        keysPressed = queryInput();
+    end
+    
+    response = [nan nan];
+    
+    while toc(trial_clock)<1.5
+        % Present the fixation cross.
+        %         DrawFormattedText(w, '+','center','center');
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+        vbl=Screen('Flip', w);
+        keysPressed = queryInput();
+    end
+    
+    % Present the stimulus.
+    tini = GetSecs;
+    % The onset of the stimulus is encoded in the log file as '0'.
+    log.events = [log.events; 0 toc(global_clock)];
+    
+    while (GetSecs - tini)<params.display_time
+        Screen('DrawTextures',w,target, [], [],(1-params.vVertical(num_trial))*...
+            (params.AngleMu+anglesigma(end)*params.vOrient(num_trial)),...
+            [], params.Alpha*params.vPresent(num_trial));
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+        vbl=Screen('Flip', w);
+        keysPressed = queryInput();
+    end
+    
+    %% Wait for response
+    while (GetSecs - tini)<params.display_time+params.time_to_respond
+        
+        %During the first 200 milliseconds a fixation cross appears on
+        %the screen. The subject can respond during this time
+        %nevertheless.
+        if (GetSecs - tini)<params.display_time+0.2
+            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+            %               DrawFormattedText(w, '+','center','center');
+        else
+            Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},...
+                [],[],0.5+0.5*(response(2)==1))
+            Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},...
+                [],[],0.5+0.5*(response(2)==0))
+        end
+        vbl=Screen('Flip', w);
+        keysPressed = queryInput();
+        if keysPressed(KbName(params.keys{params.vertical}))
+            response = [GetSecs-tini 1];
+        elseif keysPressed(KbName(params.keys{3-params.vertical}))
+            response = [GetSecs-tini 0];
+        end
+    end
+    
+   
+    % Write to log.
+    log.resp(num_trial,:) = response;
+    log.stimTime{num_trial} = vbl;
+    if keysPressed(KbName('ESCAPE'))
+        Screen('CloseAll');
+    end
+    
+    % Check if the response was accurate or not
+    if sign(log.resp(num_trial,2))== sign(params.vVertical(num_trial))
+        log.correct(num_trial) = 1;
+        stack(end+1) = 1;
+    else
+        log.correct(num_trial) = 0;
+        stack(end+1) = 0;
+    end
+    
+    %1up2down
+    if stack(end) == 0
+        anglesigma(end+1) = anglesigma(end)/step_size;
+        stack = [];
+    elseif numel(stack)==2
+        anglesigma(end+1) = anglesigma(end)*step_size;
+        stack = [];
+    else
+        anglesigma(end+1) = anglesigma(end);
+    end
+    
+    if num_trial>=1060 && mod(num_trial,20)==0
+        
+        last_20 = nanmean(log.correct(num_trial-19:num_trial));
+        lastlast_20 = nanmean(log.correct(num_trial-39:num_trial-20));
+
+        if all([last_20,lastlast_20]<=0.75) && all([last_20,lastlast_20]>=0.67)
+            proceed = 0
+            params.AngleSigma = 2^(mean(log2(anglesigma(end-39:end))));
+        end
+    end
+
 end
 
 %% close
 Priority(0);
 ShowCursor
 Screen('CloseAll');
+
+% Make a gong sound so that I can hear from outside the testing room that
+% the behavioural session is over :-)
+if ~params.scanning
+    load gong.mat;
+    soundsc(y);
+end
+
+%% write to log
+
+if ~params.practice
+    log.date = date;
+    log.version = version;
+    save(fullfile('data', params.filename),'params','log');
+    if exist(fullfile('data', ['temp_',params.filename]), 'file')==2
+        delete(fullfile('data', ['temp_',params.filename]));
+    end
+end
+
