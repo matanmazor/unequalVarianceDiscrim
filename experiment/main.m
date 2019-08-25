@@ -198,15 +198,17 @@ for num_trial = 1:params.Nsets
             %During the first 200 milliseconds a fixation cross appears on
             %the screen. The subject can respond during this time
             %nevertheless.
-            if (GetSecs - tini)<params.display_time+0.2
-                Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-%               DrawFormattedText(w, '+','center','center');
-            else
+            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+
+            if (GetSecs - tini)>=params.display_time+0.2
+               
                 Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes}, ...
                     [],[], 0.5+0.5*(response(2)==1))
                 Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes},...
                     [],[], 0.5+0.5*(response(2)==0))
+
             end
+            
             vbl=Screen('Flip', w);
             keysPressed = queryInput();
             if keysPressed(KbName(params.keys{params.yes}))
@@ -218,15 +220,17 @@ for num_trial = 1:params.Nsets
         
     else %discrimination
         while (GetSecs - tini)<params.display_time+params.time_to_respond
-            if (GetSecs - tini)<params.display_time+0.2
-                Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-%               DrawFormattedText(w, '+','center','center');
-            else
+            
+            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+
+            if (GetSecs - tini)>=params.display_time+0.2
+%              
                 Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},...
                     [],[],0.5+0.5*(response(2)==1))
                 Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},...
                     [],[],0.5+0.5*(response(2)==0))
             end
+            
             vbl=Screen('Flip', w);
             keysPressed = queryInput();
             if keysPressed(KbName(params.keys{params.vertical}))

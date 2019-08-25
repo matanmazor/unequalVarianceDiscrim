@@ -101,7 +101,7 @@ DisableKeysForKbCheck(KbName('5%'));
 proceed = 1;
 num_trial = 0;
 alpha = 0.05;
-anglesigma = 40;
+anglemu = 40;
 
 global_clock = tic();
 
@@ -165,7 +165,7 @@ while proceed
     log.events = [log.events; 0 toc(global_clock)];
     
     while (GetSecs - tini)<params.display_time
-        Screen('DrawTextures',w,target, [], [],params.AngleMu+anglesigma(end)*...
+        Screen('DrawTextures',w,target, [], [],anglemu(end)+params.AngleSigma+anglemu(end)*...
             params.vOrient(num_trial),...
             [], alpha(end)*params.vPresent(num_trial));
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
@@ -179,10 +179,10 @@ while proceed
         %During the first 200 milliseconds a fixation cross appears on
         %the screen. The subject can respond during this time
         %nevertheless.
-        if (GetSecs - tini)<params.display_time+0.2
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-            %               DrawFormattedText(w, '+','center','center');
-        else
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+
+        if (GetSecs - tini)>=params.display_time+0.2
+            
             Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes}, ...
                 [],[], 0.5+0.5*(response(2)==1))
             Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes},...
@@ -305,7 +305,7 @@ while proceed
     
     while (GetSecs - tini)<params.display_time
         Screen('DrawTextures',w,target, [], [],(1-params.vVertical(num_trial))*...
-            (params.AngleMu+anglesigma(end)*params.vOrient(num_trial)),...
+            (anglemu(end)+params.AngleSigma*params.vOrient(num_trial)),...
             [], params.Alpha*params.vPresent(num_trial));
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
@@ -318,15 +318,16 @@ while proceed
         %During the first 200 milliseconds a fixation cross appears on
         %the screen. The subject can respond during this time
         %nevertheless.
-        if (GetSecs - tini)<params.display_time+0.2
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-            %               DrawFormattedText(w, '+','center','center');
-        else
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+
+        if (GetSecs - tini)>=params.display_time+0.2
+  
             Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},...
                 [],[],0.5+0.5*(response(2)==1))
             Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},...
                 [],[],0.5+0.5*(response(2)==0))
         end
+        
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
         if keysPressed(KbName(params.keys{params.vertical}))
@@ -355,13 +356,13 @@ while proceed
     
     %1up2down
     if stack(end) == 0
-        anglesigma(end+1) = anglesigma(end)/step_size;
+        anglemu(end+1) = anglemu(end)/step_size;
         stack = [];
     elseif numel(stack)==2
-        anglesigma(end+1) = anglesigma(end)*step_size;
+        anglemu(end+1) = anglemu(end)*step_size;
         stack = [];
     else
-        anglesigma(end+1) = anglesigma(end);
+        anglemu(end+1) = anglemu(end);
     end
     
     if num_trial>=1060 && mod(num_trial,20)==0
@@ -371,7 +372,7 @@ while proceed
 
         if all([last_20,lastlast_20]<=0.75) && all([last_20,lastlast_20]>=0.67)
             proceed = 0
-            params.AngleSigma = 2^(mean(log2(anglesigma(end-39:end))));
+            params.AngleMu = 2^(mean(log2(anglemu(end-39:end))));
         end
     end
 

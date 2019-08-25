@@ -70,8 +70,8 @@ params.waitframes = 1;
 if params.practice || calibration
     
     params.Alpha = 0.07; %transparency
-    params.AngleSigma = 10; %variance of non-vertical Gabors
-    params.AngleMu = 0; % overall biad of non-vertical Gabors
+    params.AngleSigma = 20; %variance of non-vertical Gabors
+    params.AngleMu = 10; % overall biad of non-vertical Gabors
     
 elseif ~exist('old_params') 
     
