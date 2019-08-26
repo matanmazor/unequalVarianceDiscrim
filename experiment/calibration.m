@@ -99,9 +99,10 @@ end
 DisableKeysForKbCheck(KbName('5%'));
 
 proceed = 1;
+fixed = 0;
 num_trial = 0;
-alpha = 0.05;
-anglemu = 40;
+alpha = params.Alpha;
+anglemu = params.AngleMu;
 
 global_clock = tic();
 
@@ -180,7 +181,7 @@ while proceed
         %the screen. The subject can respond during this time
         %nevertheless.
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-
+        
         if (GetSecs - tini)>=params.display_time+0.2
             
             Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes}, ...
@@ -197,7 +198,7 @@ while proceed
         end
     end
     
-   
+    
     % Write to log.
     log.resp(num_trial,:) = response;
     log.stimTime{num_trial} = vbl;
@@ -215,27 +216,36 @@ while proceed
     end
     
     %1up2down
-    if stack(end) == 0
+    if stack(end)== 0 && ~fixed 
         alpha(end+1) = alpha(end)/step_size;
         stack = [];
-    elseif numel(stack)==2
+    elseif numel(stack)==2 && ~fixed 
         alpha(end+1) = alpha(end)*step_size;
         stack = [];
     else
         alpha(end+1) = alpha(end);
     end
     
-    if num_trial>=60 && mod(num_trial,20)==0
+    if num_trial>=64 && mod(num_trial,16)==0
         
-        last_20 = nanmean(log.correct(num_trial-19:num_trial));
-        lastlast_20 = nanmean(log.correct(num_trial-39:num_trial-20));
+        last_16 = nanmean(log.correct(num_trial-15:num_trial));
+        good_acc = last_16<=0.75 && last_16>=0.67;
+        goodenough_acc = last_16<=0.82 && last_16>=0.56;
 
-        if all([last_20,lastlast_20]<=0.75) && all([last_20,lastlast_20]>=0.67)
-            proceed = 0
-            params.Alpha = 2^(mean(log2(alpha(num_trial-39:num_trial))));
+        if goodenough_acc && ~fixed
+            alpha(end+1) = 2^(mean(log2(alpha(end-15:end))));
+            fixed = 1;
+        elseif good_acc && fixed
+            params.Alpha = alpha(end);
+            proceed = 0;
+            fixed = 0;
+            stack = [];
+        elseif ~good_acc && fixed
+            fixed = 0;
+            stack = [];
         end
     end
-
+    
 end
 
 global_clock = tic();
@@ -252,7 +262,7 @@ while toc(global_clock)<params.instruction_time
     
     vbl=Screen('Flip', w);
     keysPressed = queryInput();
-
+    
 end
 
 num_trial = 1000;
@@ -319,9 +329,9 @@ while proceed
         %the screen. The subject can respond during this time
         %nevertheless.
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-
+        
         if (GetSecs - tini)>=params.display_time+0.2
-  
+            
             Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},...
                 [],[],0.5+0.5*(response(2)==1))
             Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},...
@@ -337,7 +347,7 @@ while proceed
         end
     end
     
-   
+    
     % Write to log.
     log.resp(num_trial,:) = response;
     log.stimTime{num_trial} = vbl;
@@ -355,27 +365,36 @@ while proceed
     end
     
     %1up2down
-    if stack(end) == 0
+    if stack(end) == 0 && ~fixed
         anglemu(end+1) = anglemu(end)/step_size;
         stack = [];
-    elseif numel(stack)==2
+    elseif numel(stack)==2 && ~fixed
         anglemu(end+1) = anglemu(end)*step_size;
         stack = [];
     else
         anglemu(end+1) = anglemu(end);
     end
     
-    if num_trial>=1060 && mod(num_trial,20)==0
+    if num_trial>=1064 && mod(num_trial-1000,16)==0
         
-        last_20 = nanmean(log.correct(num_trial-19:num_trial));
-        lastlast_20 = nanmean(log.correct(num_trial-39:num_trial-20));
-
-        if all([last_20,lastlast_20]<=0.75) && all([last_20,lastlast_20]>=0.67)
-            proceed = 0
-            params.AngleMu = 2^(mean(log2(anglemu(end-39:end))));
+        last_16 = nanmean(log.correct(num_trial-15:num_trial));
+        good_acc = last_16<=0.75 && last_16>=0.67;
+        goodenough_acc = last_16<=0.82 && last_16>=0.56;
+        
+        if goodenough_acc && ~fixed
+            anglemu(end+1) = 2^(mean(log2(anglemu(end-15:end))));
+            fixed = 1;
+        elseif good_acc && fixed
+            params.AngleMu = anglemu(end);
+            proceed = 0;
+            fixed = 0;
+            stack = [];
+        elseif ~good_acc && fixed
+            fixed = 0;
+            stack = [];
         end
     end
-
+    
 end
 
 %% close
