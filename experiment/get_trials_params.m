@@ -19,6 +19,12 @@ end
 vPresent = [];
 vVertical = [];
 
+% If calibration, make sure presence/orientation are balanced locally. 
+% this is done by randomizing things in balanced chunks of 8 trials, that
+% are then concatenated together. As a consequence, the maximum number of
+% trials of the same type that can appear in series is 8.
+four0four1 = [0 0 0 0 1 1 1 1];
+
 % loop over experimental blocks
 for i=1:length(vTask)
     
@@ -26,11 +32,24 @@ for i=1:length(vTask)
     detection = vTask(i);
    
     if ~detection
-       vVertical = [vVertical; binornd(1,0.5,params.trialsPerBlock,1)];
+       if ~params.calibration
+            vVertical = [vVertical; binornd(1,0.5,params.trialsPerBlock,1)];
+       else
+           for i_c = 1:params.trialsPerBlock/numel(four0four1)
+               vVertical = [vVertical; four0four1(randperm(numel(four0four1)))];
+           end
+       end
        vPresent = [vPresent; ones(params.trialsPerBlock,1)];
 
     else 
         vVertical = [vVertical; zeros(params.trialsPerBlock,1)];
+        if ~params.calibration
+            vPresent = [vPresent; binornd(1,0.5,params.trialsPerBlock,1)];
+        else
+           for i_c = 1:params.trialsPerBlock/numel(four0four1)
+               vPresent = [vPresent; four0four1(randperm(numel(four0four1)))];
+           end
+       end
         vPresent = [vPresent; binornd(1,0.5,params.trialsPerBlock,1)];
     end
     
