@@ -87,7 +87,6 @@ else
     % numbers were chosen because the likelihood of reaching these levels
     % of accuracy when performance is at 0.71 is around 1 percent.
     
-    params.AngleSigma =  old_params.params.AngleSigma(end);
     if params.scanning
         lower_bound = 0.525;
         upper_bound = 0.85;
@@ -106,7 +105,7 @@ else
             params.AngleMu = old_params.params.AngleMu(end)/0.9;
     % else, don't change mu or alpha        
     else
-            params.Alpha = old_params.params.Alpha(end);
+            params.DetWg = old_params.params.DetWg(end);
             params.AngleMu = old_params.params.AngleMu(end);
     end
     

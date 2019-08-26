@@ -31,7 +31,7 @@ default = {'999MaMa','0','0'}; % default filename
 savestr = inputdlg(prompt,dlg_title,num_lines,default);
 
 %set preferences and open screen
-% Screen('Preference','SkipSyncTests', 1)
+Screen('Preference','SkipSyncTests', 1)
 screens=Screen('Screens');
 screenNumber=max(screens);
 doublebuffer=1;
