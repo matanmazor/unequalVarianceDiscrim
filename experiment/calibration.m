@@ -35,6 +35,11 @@ Screen('Preference','SkipSyncTests', 1)
 screens=Screen('Screens');
 screenNumber=max(screens);
 doublebuffer=1;
+% In order to make sure that gratings are being presented even with very 
+% low alpha levels (https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/585)
+% I enable PseudoGray. help CreatePseudoGrayLUT
+PsychImaging('PrepareConfiguration');
+PsychImaging('AddTask', 'General', 'EnablePseudoGrayOutput'); 
 
 %The fMRI button box does not work well with KbCheck. I use KbQueue
 %instead here, to get precise timings and be sensitive to all presses.
