@@ -22,8 +22,8 @@ global w %psychtoolbox window
 
 %name: name of subject. Should start with the subject number. The name of
 %the subject should be included in the data/subjects.mat file.
-%practice: 0 for no, 1 for discrimination practice, 2 for detection
-%practice.
+%practice: 0 for no, 10 for discrimination practice, 11 for detection, 12
+%for tilt practice.
 %scanning: 0 for no, 1 for yes. this parameter only affects the sensitivity
 %of the inter-run staircasing procedure.
 prompt = {'Name: ', 'Practice: ', 'Scanning: '};
@@ -68,7 +68,7 @@ Screen('BlendFunction', w, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 % Initialize log with NaNs where possible.
 log.confidence = nan(params.Nsets,1);
 log.resp = zeros(params.Nsets,2);
-log.detection = nan(params.Nsets,1);
+log.task = nan(params.Nsets,1);
 log.Alpha = nan(params.Nsets,1);
 log.correct = nan(params.Nsets,1);
 log.events = [];
@@ -84,7 +84,7 @@ slicesperVolume = 48;
 
 %initialize
 num_five = 0;
-while num_five<excludeVolumes*slicesperVolume
+while num_five<excludeVolumes*slicesperVolume && params.scanning
     Screen('DrawTexture', w, params.waitTexture);
     vbl=Screen('Flip', w);
     [ ~, firstPress]= KbQueueCheck;
@@ -120,8 +120,8 @@ for num_trial = 1:params.Nsets
             save(fullfile('data', ['temp_',params.filename]),'params','log');
         end
         
-        %2. Set task to detection or discrimination
-        detection = params.vTask(ceil(num_trial/params.trialsPerBlock));
+        %2. Set task to 0 (discrimination), 1 (detection) or 2 (tilt)
+        task = params.vTask(ceil(num_trial/params.trialsPerBlock));
         
         %3. Leave the instructions on the screen for 5 seconds.
         if num_trial==1
@@ -134,18 +134,26 @@ for num_trial = 1:params.Nsets
         
         while toc(global_clock)<remove_instruction_time
             
-            if detection
+            if task ==0
+                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.clockwise}, 45);
+                Screen('DrawTexture', w, params.vertTexture, [], params.positions{3-params.clockwise}, -45)
+                alpha = params.DisAlpha(end);
+            elseif task==1
                 Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes})
                 Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes})
-            else
+                alpha = params.DetAlpha(end);
+            elseif task ==2
                 Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical})
                 Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical})
+                alpha = params.TiltAlpha(end);
+            else
+                error('unknown task number');
             end
             
               % because DrawText is not working :-(
               % https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/579
               Screen('DrawTexture', w, params.orTexture); 
-%             DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
+            DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
             
             vbl=Screen('Flip', w);
             keysPressed = queryInput();
@@ -157,11 +165,11 @@ for num_trial = 1:params.Nsets
     [target,target_xy] = generate_stim(params, num_trial);
 
     % Save to log.
-    log.Alpha(num_trial) = params.vPresent(num_trial)*params.Alpha;
+    log.Alpha(num_trial) = params.vPresent(num_trial)*alpha;
     log.Orientation(num_trial) = params.vOrient(num_trial)*...
         (1-params.vVertical(num_trial));
     log.xymatrix{num_trial} = target_xy;
-    log.detection(num_trial) = detection;
+    log.task(num_trial) = task;
     
 
     while toc(global_clock)<params.onsets(num_trial)-0.5
@@ -191,14 +199,37 @@ for num_trial = 1:params.Nsets
     while (GetSecs - tini)<params.display_time
         Screen('DrawTextures',w,target, [], [],(1-params.vVertical(num_trial))...
             *params.vOrient(num_trial),...
-            [], params.Alpha*params.vPresent(num_trial));
+            [], alpha*params.vPresent(num_trial));
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
     end
     
     %% Wait for response
-    if detection
+    
+    if task ==0 %discrimination
+        while (GetSecs - tini)<params.display_time+params.time_to_respond
+            
+            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+
+            if (GetSecs - tini)>=params.display_time+0.2
+%              
+                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.clockwise},...
+                    45,[],0.5+0.5*(response(2)==1))
+                Screen('DrawTexture', w, params.vertTexture, [], params.positions{3-params.clockwise},...
+                    -45,[],0.5+0.5*(response(2)==0))
+            end
+            
+            vbl=Screen('Flip', w);
+            keysPressed = queryInput();
+            if keysPressed(KbName(params.keys{params.clockwise}))
+                response = [GetSecs-tini 1];
+            elseif keysPressed(KbName(params.keys{3-params.clockwise}))
+                response = [GetSecs-tini 0];
+            end
+        end
+    
+    elseif task==1 %detection
         while (GetSecs - tini)<params.display_time+params.time_to_respond
             
             %During the first 200 milliseconds a fixation cross appears on
@@ -224,7 +255,7 @@ for num_trial = 1:params.Nsets
             end
         end
         
-    else %discrimination
+    elseif task==2 %tilt discrimination
         while (GetSecs - tini)<params.display_time+params.time_to_respond
             
             Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
@@ -255,13 +286,19 @@ for num_trial = 1:params.Nsets
     end
     
     % Check if the response was accurate or not
-    if detection && ~isnan(log.resp(num_trial,2))
+    if task==0 && ~isnan(log.resp(num_trial,2))
+        if sign(log.resp(num_trial,2))== sign(params.vOrient(num_trial)+45)
+            log.correct(num_trial) = 1;
+        else
+            log.correct(num_trial) = 0;
+        end
+    elseif task==1 && ~isnan(log.resp(num_trial,2))
         if log.resp(num_trial,2)== sign(params.vPresent(num_trial))
             log.correct(num_trial) = 1;
         else
             log.correct(num_trial) = 0;
         end
-    elseif ~detection && ~isnan(log.resp(num_trial,2))
+    elseif task==2 && ~isnan(log.resp(num_trial,2))
         if log.resp(num_trial,2) == params.vVertical(num_trial)
             log.correct(num_trial) = 1;
         else

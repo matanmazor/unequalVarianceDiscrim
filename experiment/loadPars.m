@@ -5,7 +5,7 @@ function params = loadPars(w, rect, savestr, calibration)
  The construction of confidence in percpetual decision.
  Frontiers in integrative neuroscience,6, 79.
 
- Matan Mazor, 2018
+ Matan Mazor, 2019
 %}
 
 
@@ -49,11 +49,10 @@ else
 end
 
 % Tha mapping between Gabor orientations and right/left alternates between
-% runs. When this equals 1, the 'Yes'/'clockwise' response will be on the right.
-params.yes = mod(params.num_session,2)+1;
-% for historical reasons, 'vertical' is 'clockwise' and 'horizontal' and
-% 'anticlockwise'. 
-params.vertical = mod(params.num_session+1,2)+1;
+% runs. When this equals 1, the 'Yes'/'clockwise'/'vertical' response will be on the right.
+params.yes = 1+binornd(1,0.5);
+params.vertical = 1+binornd(1,0.5);
+params.clockwise = 1+binornd(1,0.5);
 
 %% randomize
 if ~params.practice
@@ -69,19 +68,26 @@ end
 params.waitframes = 1; 
 if params.practice || calibration
     
-    params.Alpha = 0.07; %transparency
+    params.DetAlpha = 0.07; %transparency in detection
+    params.DisAlpha = 0.07; %transparency in (equal variance) discrimination
+    params.TiltAlpha = 0.07; %transparency in tilt detection/ unequal variance discrimination
+    
     params.AngleSigma = 10; %variance of non-vertical Gabors
-    params.AngleMu = 10; % overall biad of non-vertical Gabors
+    params.AngleMu = 10; % overall bias of non-vertical Gabors
     
 elseif ~exist('old_params') 
     
     old_params = load(fullfile('data',strjoin({params.subj,'calibration.mat'},'_')));
-    params.Alpha = old_params.params.Alpha(end); 
+    
+    params.DetAlpha = old_params.params.DetAlpha(end); 
+    params.DisAlpha = old_params.params.DisAlpha(end);
+    params.TiltAlpha = old_params.params.TiltAlpha(end);
+
     params.AngleSigma = old_params.params.AngleSigma(end); 
     params.AngleMu = old_params.params.AngleMu(end);
     
 else
-    % Monitor and update the Alpha and AngleMu parameter based on performance on the
+    % Monitor and update the Alpha parameters based on performance on the
     % previous run. Don't change unless performance was below 0.525 or above
     % 0.85, in which case multiply or divide by a factor of 0.85. These
     % numbers were chosen because the likelihood of reaching these levels
@@ -96,26 +102,43 @@ else
         upper_bound = 0.8;
     end
     
-    % if detection performance was too low, increase alpha, decrease mu
-    if nanmean(old_params.log.correct(find(old_params.log.detection)))<=lower_bound
-            params.Alpha = old_params.params.Alpha(end)/0.9;
-            params.AngleMu = old_params.params.AngleMu(end)*0.9;
-    % if detection performance was too high, decrease alpha, increase mu        
-    elseif nanmean(old_params.log.correct(find(old_params.log.detection)))>=upper_bound
-            params.Alpha = old_params.params.Alpha(end)*0.9;
-            params.AngleMu = old_params.params.AngleMu(end)/0.9;
-    % else, don't change mu or alpha        
+%     IMPORTANT: tasks are encoded as follows:
+%     0 ==> Discrimination (equal variance)
+%     1 ==> Detection
+%     2 ==> Tilt (unequal variance)
+
+    % if discrimination performance was too low, increase alpha
+    if nanmean(old_params.log.correct(find(old_params.log.task==0)))<=lower_bound
+            params.DisAlpha = old_params.params.DisAlpha(end)/0.9;
+    % if detection performance was too high, decrease alpha        
+    elseif nanmean(old_params.log.correct(find(old_params.log.task==0)))>=upper_bound
+            params.DisAlpha = old_params.params.DisAlpha(end)*0.9;
+    % else, don't change alpha        
     else
-            params.Alpha = old_params.params.Alpha(end);
-            params.AngleMu = old_params.params.AngleMu(end);
+            params.DisAlpha = old_params.params.DisAlpha(end);
     end
     
-    % if discrimination performance was low, increase mu
-    if nanmean(old_params.log.correct(find(1-old_params.log.detection)))<=lower_bound
-        params.AngleMu = params.AngleMu(end)/0.9;     
-    % if discrimination performance was too high, decrease mu
-    elseif nanmean(old_params.log.correct(find(1-old_params.log.detection)))>=upper_bound
-        params.AngleMu = params.AngleMu(end)*0.9;  
+    % if detection performance was too low, increase alpha
+    if nanmean(old_params.log.correct(find(old_params.log.task==1)))<=lower_bound
+            params.DetAlpha = old_params.params.DetAlpha(end)/0.9;
+    % if detection performance was too high, decrease alpha        
+    elseif nanmean(old_params.log.correct(find(old_params.log.task==1)))>=upper_bound
+            params.DetAlpha = old_params.params.DetAlpha(end)*0.9;
+    % else, don't change alpha        
+    else
+            params.DetAlpha = old_params.params.DetAlpha(end);
+    end
+    
+    % if tilt performance was too low, increase alpha
+    if nanmean(old_params.log.correct(find(old_params.log.task==2)))<=lower_bound
+            params.TiltAlpha = old_params.params.TiltAlpha(end)/0.9;
+    % if detection performance was too high, decrease alpha        
+    elseif nanmean(old_params.log.correct(find(old_params.log.task==2)))>=upper_bound
+            params.TiltAlpha = old_params.params.TiltAlpha(end)*0.9;
+    % else, don't change alpha        
+    else
+            params.TilttAlpha = old_params.params.TiltAlpha(end);
+    end
     
 %     elseif nanmean(old_params.log.correct(find(1-old_params.log.detection)))>=...
 %             nanmean(old_params.log.correct(find(old_params.log.detection)))+...
@@ -134,8 +157,8 @@ else
 %     end
 %     
         params.AngleSigma = old_params.params.AngleSigma(end);
+        params.AngleMu = old_params.params.AngleMu(end);
 
-    end
 end
 
 %% Visual properties
@@ -163,11 +186,11 @@ if params.practice
     params.calibration = 0;
 elseif calibration
     params.trialsPerBlock = 100;
-    params.Nblocks = 2;
+    params.Nblocks = 3;
     params.calibration = 1;
 else
-    params.trialsPerBlock = 40;
-    params.Nblocks = 2;
+    params.trialsPerBlock = 26;
+    params.Nblocks = 3;
     params.calibration = 0;
 end
 
@@ -250,14 +273,33 @@ params.cross_position = [params.center(1)-10,params.center(2)-10,...
 params.keys = {'2@','3#'};
 
 % determine orientation and alpha for every trial
+if params.practice == 10
+    
+    % in discrimination, samples are never vertical
+    params.vVertical = zeros(params.Nsets,1); 
+    
+    % in discrimination, a stimulus is presented on all trials
+    params.vPresent = ones(params.Nsets,1);   
+    
+    params.vTask = [0, 0];
+    
+    params.onsets = cumsum(6*ones(params.Nsets));
+    
+    %in discrimination, the orientation is 45 on half of the trials and -45
+    %on the other half.
+    params.vOrient = (1:params.Nsets)>params.Nsets/2;
+    params.vOrient = -45+90*params.vOrient(randperm(params.Nsets));    
+        
+    params.vPhase = rand(params.Nsets,1);
 
-if params.practice == 2 %practice detection
+elseif params.practice == 11 %practice detection
     
     % in detection, samples are never vertical
     params.vVertical = zeros(params.Nsets,1); 
     
     % only on half of the trials a stimulus is presented
-    params.vPresent = binornd(1,0.5,params.Nsets,1); 
+    params.vPresent = (1:params.Nsets)>params.Nsets/2;
+    params.vPresent = params.vPresent(randperm(params.Nsets));    
     
     params.vTask = [1, 1];
     
@@ -267,7 +309,7 @@ if params.practice == 2 %practice detection
         
     params.vPhase = rand(params.Nsets,1);
     
-elseif params.practice == 1 %practice discrimination
+elseif params.practice == 12 %practice tilt detection/ unequal variance discrimination
     
     params.vVertical = (1:params.Nsets)>params.Nsets/2;
     params.vVertical = params.vVertical(randperm(params.Nsets));    
@@ -275,7 +317,7 @@ elseif params.practice == 1 %practice discrimination
     % in discrimination, a stimulus is presented on all trials
     params.vPresent = ones(params.Nsets,1);
     
-    params.vTask = [0, 0];
+    params.vTask = [2, 2];
     
     params.onsets = cumsum(6*ones(params.Nsets));
     
@@ -285,11 +327,8 @@ elseif params.practice == 1 %practice discrimination
     
 elseif calibration 
     
-    params.vVertical = [zeros(1000,1); binornd(1,0.5,1000,1)];
-    params.vPresent = [binornd(1,0.5,1000,1); ones(1000,1)];
-    params.vTasl = [1,0];
-    params.vOrient = normrnd(0,1,2000,1);
-    params.vPhase = rand(2000,1);
+    params.vPhase = rand(3000,1);
+    params.run_duration = 601.44; %seconds = 179 TRs of 3.36 seconds;
     
 else% true experimental session 
     params.run_duration = 601.44; %seconds = 179 TRs of 3.36 seconds;
