@@ -37,11 +37,11 @@ Screen('Preference','SkipSyncTests', 1)
 screens=Screen('Screens');
 screenNumber=max(screens);
 doublebuffer=1;
-% In order to make sure that gratings are being presented even with very 
+% In order to make sure that gratings are being presented even with very
 % low alpha levels (https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/585)
 % I enable PseudoGray. help CreatePseudoGrayLUT
 PsychImaging('PrepareConfiguration');
-PsychImaging('AddTask', 'General', 'EnablePseudoGrayOutput'); 
+PsychImaging('AddTask', 'General', 'EnablePseudoGrayOutput');
 
 
 %The fMRI button box does not work well with KbCheck. I use KbQueue
@@ -107,11 +107,11 @@ global_clock = tic();
 DisableKeysForKbCheck(KbName('5%'));
 
 %% MAIN LOOP:
-for num_trial = 1:params.Nsets    
+for num_trial = 1:params.Nsets
     
     % Restrat Queue
     KbQueueStart;
-   
+    
     % At the beginning of each experimental block:
     if mod(num_trial,round(params.trialsPerBlock))==1
         
@@ -150,10 +150,10 @@ for num_trial = 1:params.Nsets
                 error('unknown task number');
             end
             
-              % because DrawText is not working :-(
-              % https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/579
-              Screen('DrawTexture', w, params.orTexture); 
-%             DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
+            % because DrawText is not working :-(
+            % https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/579
+            Screen('DrawTexture', w, params.orTexture);
+            %             DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
             
             vbl=Screen('Flip', w);
             keysPressed = queryInput();
@@ -163,7 +163,7 @@ for num_trial = 1:params.Nsets
     % Start actual trials:
     % Generate the stimulus.
     [target,target_xy] = generate_stim(params, num_trial);
-
+    
     % Save to log.
     log.Alpha(num_trial) = params.vPresent(num_trial)*alpha;
     log.Orientation(num_trial) = params.vOrient(num_trial)*...
@@ -171,13 +171,13 @@ for num_trial = 1:params.Nsets
     log.xymatrix{num_trial} = target_xy;
     log.task(num_trial) = task;
     
-
+    
     while toc(global_clock)<params.onsets(num_trial)-0.5
         % Present a dot at the centre of the screen.
         Screen('DrawDots', w, [0 0]', ...
             params.fixation_diameter_px, [255 255 255]*0.4, params.center,1);
         vbl=Screen('Flip', w);%initial flip
-   
+        
         keysPressed = queryInput();
     end
     
@@ -185,7 +185,7 @@ for num_trial = 1:params.Nsets
     
     while toc(global_clock)<params.onsets(num_trial)
         % Present the fixation cross.
-%         DrawFormattedText(w, '+','center','center');
+        %         DrawFormattedText(w, '+','center','center');
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
@@ -207,74 +207,22 @@ for num_trial = 1:params.Nsets
     
     %% Wait for response
     
-    if task ==0 %discrimination
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-
-            if (GetSecs - tini)>=params.display_time+0.2
-%              
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.clockwise},...
-                    45,[],0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{3-params.clockwise},...
-                    -45,[],0.5+0.5*(response(2)==0))
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.clockwise}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.clockwise}))
-                response = [GetSecs-tini 0];
-            end
-        end
-    
-    elseif task==1 %detection
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            %During the first 200 milliseconds a fixation cross appears on
-            %the screen. The subject can respond during this time
-            %nevertheless.
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-
-            if (GetSecs - tini)>=params.display_time+0.2
-               
-                Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes}, ...
-                    [],[], 0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes},...
-                    [],[], 0.5+0.5*(response(2)==0))
-
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.yes}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.yes}))
-                response = [GetSecs-tini 0];
-            end
+    display_bool=0;
+    while (GetSecs - tini)<params.display_time+params.time_to_respond
+        
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+        resp1 = displayResps(task, response, display_bool);
+        
+        if (GetSecs - tini)>=params.display_time+0.42
+            display_bool = 1;
         end
         
-    elseif task==2 %tilt discrimination
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-
-            if (GetSecs - tini)>=params.display_time+0.2
-%              
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},...
-                    [],[],0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},...
-                    [],[],0.5+0.5*(response(2)==0))
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.vertical}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.vertical}))
-                response = [GetSecs-tini 0];
-            end
+        vbl=Screen('Flip', w);
+        keysPressed = queryInput();
+        if keysPressed(KbName(params.keys{resp1}))
+            response = [GetSecs-tini 1];
+        elseif keysPressed(KbName(params.keys{3-resp1}))
+            response = [GetSecs-tini 0];
         end
     end
     

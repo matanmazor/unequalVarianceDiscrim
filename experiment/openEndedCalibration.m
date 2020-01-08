@@ -163,77 +163,24 @@ while num_trial <= params.Nsets
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
     end
-    
-    if task ==0 %discrimination
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-            
-            if (GetSecs - tini)>=params.display_time+0.2
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.clockwise},...
-                    45,[],0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{3-params.clockwise},...
-                    -45,[],0.5+0.5*(response(2)==0))
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.clockwise}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.clockwise}))
-                response = [GetSecs-tini 0];
-            end
+     display_bool=0;
+    while (GetSecs - tini)<params.display_time+params.time_to_respond
+        
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+        resp1 = displayResps(task, response, display_bool);
+        
+        if (GetSecs - tini)>=params.display_time+0.42
+            display_bool = 1;
         end
         
-    elseif task==1 %detection
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            %During the first 200 milliseconds a fixation cross appears on
-            %the screen. The subject can respond during this time
-            %nevertheless.
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-            
-            if (GetSecs - tini)>=params.display_time+0.2
-                
-                Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes}, ...
-                    [],[], 0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes},...
-                    [],[], 0.5+0.5*(response(2)==0))
-                
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.yes}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.yes}))
-                response = [GetSecs-tini 0];
-            end
-        end
-        
-    elseif task==2 %tilt discrimination
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-            
-            if (GetSecs - tini)>=params.display_time+0.2
-                %
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},...
-                    [],[],0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},...
-                    [],[],0.5+0.5*(response(2)==0))
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.vertical}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.vertical}))
-                response = [GetSecs-tini 0];
-            end
+        vbl=Screen('Flip', w);
+        keysPressed = queryInput();
+        if keysPressed(KbName(params.keys{resp1}))
+            response = [GetSecs-tini 1];
+        elseif keysPressed(KbName(params.keys{3-resp1}))
+            response = [GetSecs-tini 0];
         end
     end
-    
     
     log.resp(num_trial,:) = response;
     if keysPressed(KbName('ESCAPE'))
