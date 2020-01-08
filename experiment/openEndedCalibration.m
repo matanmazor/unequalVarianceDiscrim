@@ -6,7 +6,7 @@ version = '2019-12-11';
 % github.com/matanmazor/prerng
 % addpath('..\..\..\2018\preRNG\Matlab')
 
-% PsychDebugWindowConfiguration()
+PsychDebugWindowConfiguration()
 
 %global variables
 global log
