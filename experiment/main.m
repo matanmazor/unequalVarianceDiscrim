@@ -153,7 +153,7 @@ for num_trial = 1:params.Nsets
               % because DrawText is not working :-(
               % https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/579
               Screen('DrawTexture', w, params.orTexture); 
-            DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
+%             DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
             
             vbl=Screen('Flip', w);
             keysPressed = queryInput();

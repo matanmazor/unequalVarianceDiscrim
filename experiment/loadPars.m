@@ -110,7 +110,7 @@ else
     % if discrimination performance was too low, increase alpha
     if nanmean(old_params.log.correct(find(old_params.log.task==0)))<=lower_bound
             params.DisAlpha = old_params.params.DisAlpha(end)/0.9;
-    % if detection performance was too high, decrease alpha        
+    % if discrimination performance was too high, decrease alpha        
     elseif nanmean(old_params.log.correct(find(old_params.log.task==0)))>=upper_bound
             params.DisAlpha = old_params.params.DisAlpha(end)*0.9;
     % else, don't change alpha        

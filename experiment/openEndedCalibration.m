@@ -6,7 +6,7 @@ version = '2019-12-11';
 % github.com/matanmazor/prerng
 % addpath('..\..\..\2018\preRNG\Matlab')
 
-PsychDebugWindowConfiguration()
+% PsychDebugWindowConfiguration()
 
 %global variables
 global log
@@ -113,9 +113,8 @@ while num_trial <= params.Nsets
         vbl=Screen('Flip', w);
         
         instruction_clock = tic;
-        keyIsDown = queryInput();
-        while ~keyIsDown
-            keyIsDown = KbQueueCheck();
+        while toc(instruction_clock)<5
+            continue
         end
     end
     
@@ -260,6 +259,8 @@ while num_trial <= params.Nsets
         else
             log.correct(num_trial) = 0;
         end
+    else 
+        log.correct(num_trial) = NaN;
     end
     
     % end of decision phase
@@ -295,7 +296,7 @@ while num_trial <= params.Nsets
                 params.TiltAlpha = [params.TiltAlpha;  mode(log.Alpha(num_trial-9:num_trial))];
             end
             
-            if mod(num_trial, params.trialsPerBlock)>80
+            if mod(num_trial, params.trialsPerBlock)>20
                 %and it didn't change last time either, move to the next
                 %task.
                 if task==0 && params.DisAlpha(end-1)==params.DisAlpha(end)
