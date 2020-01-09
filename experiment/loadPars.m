@@ -131,13 +131,13 @@ else
     
     % if tilt performance was too low, increase alpha
     if nanmean(old_params.log.correct(find(old_params.log.task==2)))<=lower_bound
-            params.TiltAlpha = old_params.params.TiltAlpha(end)/0.9;
+            params.AngleSigma = old_params.params.AngleSigma(end)/0.9;
     % if detection performance was too high, decrease alpha        
     elseif nanmean(old_params.log.correct(find(old_params.log.task==2)))>=upper_bound
-            params.TiltAlpha = old_params.params.TiltAlpha(end)*0.9;
+            params.AngleSigma = old_params.params.AngleSigma(end)*0.9;
     % else, don't change alpha        
     else
-            params.TilttAlpha = old_params.params.TiltAlpha(end);
+            params.AngleSigma = old_params.params.AngleSigma(end);
     end
     
 %     elseif nanmean(old_params.log.correct(find(1-old_params.log.detection)))>=...

@@ -53,7 +53,7 @@ Priority(MaxPriority(w));
 % for drawing of smoothed points:
 Screen('BlendFunction', w, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-% In order to make sure that gratings are being presented even with very 
+% In order to make sure that gratings are being presented even with very
 % low alpha levels (https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/585)
 % I enable PseudoGray. help CreatePseudoGrayLUT
 PsychImaging('PrepareConfiguration');
@@ -82,6 +82,7 @@ converged = 0;
 num_trial = 1;
 last_two_trials = [0,0];
 alpha_vec = [];
+
 %% Strart the trials
 while num_trial <= params.Nsets
     
@@ -108,6 +109,7 @@ while num_trial <= params.Nsets
         else
             error('unknown task number');
         end
+        anglesigma = params.AngleSigma(end);
         
         Screen('DrawTexture', w, params.orTexture);
         vbl=Screen('Flip', w);
@@ -126,6 +128,7 @@ while num_trial <= params.Nsets
     log.Alpha(num_trial) = params.vPresent(num_trial)*alpha;
     log.Orientation(num_trial) = params.vOrient(num_trial)*...
         (1-params.vVertical(num_trial));
+    log.AngleSigma(num_trial) = anglesigma;
     log.xymatrix{num_trial} = target_xy;
     log.task(num_trial) = task;
     
@@ -153,23 +156,26 @@ while num_trial <= params.Nsets
     end
     
     tini = GetSecs;
-    
+    if task == 0
+        orientation = params.vOrient(num_trial)*(1-params.vVertical(num_trial));
+    else
+        orientation = params.vOrient(num_trial)*anglesigma*(1-params.vVertical(num_trial));
+    end
     %present stimulus
     while (GetSecs - tini)<params.display_time
-        Screen('DrawTextures',w,target, [], [],(1-params.vVertical(num_trial))...
-            *params.vOrient(num_trial),...
+        Screen('DrawTextures',w,target, [], [],orientation,...
             [], alpha*params.vPresent(num_trial));
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
     end
-     display_bool=0;
+    display_bool=0;
     while (GetSecs - tini)<params.display_time+params.time_to_respond
         
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         resp1 = displayResps(task, response, display_bool);
         
-        if (GetSecs - tini)>=params.display_time+0.42
+        if (GetSecs - tini)>=params.display_time+0.4
             display_bool = 1;
         end
         
@@ -206,7 +212,7 @@ while num_trial <= params.Nsets
         else
             log.correct(num_trial) = 0;
         end
-    else 
+    else
         log.correct(num_trial) = NaN;
     end
     
@@ -217,12 +223,20 @@ while num_trial <= params.Nsets
     if mod(num_trial,round(params.trialsPerBlock))>1
         if log.correct(num_trial) == 0
             a = 'incorrect'
-            alpha = alpha/0.9
+            if task<2
+                alpha = alpha/0.9
+            else
+                anglesigma = anglesigma/0.9;
+            end
             last_two_trials = [0,0]
         elseif log.correct(num_trial)==1
             if last_two_trials(2) == 1
                 a= 'two in a row'
-                alpha = alpha*0.9
+                if task<2
+                    alpha = alpha*0.9
+                else
+                    anglesigma = anglesigma*0.9;
+                end
                 last_two_trials = [0,0]
             elseif last_two_trials(2) == 0
                 last_two_trials = [0,1]
@@ -241,6 +255,7 @@ while num_trial <= params.Nsets
                 params.DetAlpha = [params.DetAlpha; mode(last_alphas(last_alphas>0))];
             elseif task==2
                 params.TiltAlpha = [params.TiltAlpha;  mode(log.Alpha(num_trial-9:num_trial))];
+                params.AngleSigma = [params.AngleSigma;  mode(log.AngleSigma(num_trial-9:num_trial))];
             end
             
             if mod(num_trial, params.trialsPerBlock)>20
@@ -252,7 +267,7 @@ while num_trial <= params.Nsets
                 elseif task==1 && params.DetAlpha(end-1)==params.DetAlpha(end)
                     last_two_trials = [0,0];
                     num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
-                elseif task==2 && params.TiltAlpha(end-1)==params.TiltAlpha(end)
+                elseif task==2 && params.AngleSigma(end-1)==params.AngleSigma(end)
                     last_two_trials = [0,0];
                     num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
                 end

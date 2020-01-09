@@ -195,10 +195,14 @@ for num_trial = 1:params.Nsets
     tini = GetSecs;
     % The onset of the stimulus is encoded in the log file as '0'.
     log.events = [log.events; 0 toc(global_clock)];
+    if task == 0
+        orientation = params.vOrient(num_trial)*(1-params.vVertical(num_trial));
+    else
+        orientation = params.vOrient(num_trial)*params.AngleSigma(end)*(1-params.vVertical(num_trial));
+    end
     
     while (GetSecs - tini)<params.display_time
-        Screen('DrawTextures',w,target, [], [],(1-params.vVertical(num_trial))...
-            *params.vOrient(num_trial),...
+        Screen('DrawTextures',w,target, [], [],orientation,...
             [], alpha*params.vPresent(num_trial));
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
@@ -213,7 +217,7 @@ for num_trial = 1:params.Nsets
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         resp1 = displayResps(task, response, display_bool);
         
-        if (GetSecs - tini)>=params.display_time+0.42
+        if (GetSecs - tini)>=params.display_time+0.4
             display_bool = 1;
         end
         

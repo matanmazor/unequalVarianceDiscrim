@@ -45,7 +45,7 @@ for i=1:length(vTask)
     elseif task==1 
         vVertical = [vVertical; zeros(params.trialsPerBlock,1)];
         vOrient = [vOrient; ...
-            normrnd(params.AngleMu,params.AngleSigma,params.trialsPerBlock,1)];
+            normrnd(0,1,params.trialsPerBlock,1)];
         if ~params.calibration
             vPresent = [vPresent; binornd(1,0.5,params.trialsPerBlock,1)];
         else
@@ -64,7 +64,7 @@ for i=1:length(vTask)
        end
        vPresent = [vPresent; ones(params.trialsPerBlock,1)];
        vOrient = [vOrient; ...
-            normrnd(params.AngleMu,params.AngleSigma,params.trialsPerBlock,1)];
+            normrnd(0,1,params.trialsPerBlock,1)];
     end
     
 end

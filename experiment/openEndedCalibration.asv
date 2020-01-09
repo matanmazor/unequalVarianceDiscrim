@@ -53,7 +53,7 @@ Priority(MaxPriority(w));
 % for drawing of smoothed points:
 Screen('BlendFunction', w, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-% In order to make sure that gratings are being presented even with very 
+% In order to make sure that gratings are being presented even with very
 % low alpha levels (https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/585)
 % I enable PseudoGray. help CreatePseudoGrayLUT
 PsychImaging('PrepareConfiguration');
@@ -82,6 +82,7 @@ converged = 0;
 num_trial = 1;
 last_two_trials = [0,0];
 alpha_vec = [];
+
 %% Strart the trials
 while num_trial <= params.Nsets
     
@@ -108,6 +109,7 @@ while num_trial <= params.Nsets
         else
             error('unknown task number');
         end
+        anglesigma = params.AngleSigma(end);
         
         Screen('DrawTexture', w, params.orTexture);
         vbl=Screen('Flip', w);
@@ -126,6 +128,7 @@ while num_trial <= params.Nsets
     log.Alpha(num_trial) = params.vPresent(num_trial)*alpha;
     log.Orientation(num_trial) = params.vOrient(num_trial)*...
         (1-params.vVertical(num_trial));
+    log.AngleSigma(num_trial) = anglesigma;
     log.xymatrix{num_trial} = target_xy;
     log.task(num_trial) = task;
     
@@ -153,87 +156,37 @@ while num_trial <= params.Nsets
     end
     
     tini = GetSecs;
-    
+    if task == 0
+        orientation = params.vOrient(num_trial);
+    else
+        orientation = params.vOrient(num_trial)*anglesigma
     %present stimulus
     while (GetSecs - tini)<params.display_time
         Screen('DrawTextures',w,target, [], [],(1-params.vVertical(num_trial))...
-            *params.vOrient(num_trial),...
+            *params.vOrient(num_trial)*anglesigma,...
             [], alpha*params.vPresent(num_trial));
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
     end
-    
-    if task ==0 %discrimination
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-            
-            if (GetSecs - tini)>=params.display_time+0.2
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.clockwise},...
-                    45,[],0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{3-params.clockwise},...
-                    -45,[],0.5+0.5*(response(2)==0))
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.clockwise}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.clockwise}))
-                response = [GetSecs-tini 0];
-            end
+    display_bool=0;
+    while (GetSecs - tini)<params.display_time+params.time_to_respond
+        
+        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+        resp1 = displayResps(task, response, display_bool);
+        
+        if (GetSecs - tini)>=params.display_time+0.4
+            display_bool = 1;
         end
         
-    elseif task==1 %detection
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            %During the first 200 milliseconds a fixation cross appears on
-            %the screen. The subject can respond during this time
-            %nevertheless.
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-            
-            if (GetSecs - tini)>=params.display_time+0.2
-                
-                Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes}, ...
-                    [],[], 0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes},...
-                    [],[], 0.5+0.5*(response(2)==0))
-                
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.yes}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.yes}))
-                response = [GetSecs-tini 0];
-            end
-        end
-        
-    elseif task==2 %tilt discrimination
-        while (GetSecs - tini)<params.display_time+params.time_to_respond
-            
-            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-            
-            if (GetSecs - tini)>=params.display_time+0.2
-                %
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical},...
-                    [],[],0.5+0.5*(response(2)==1))
-                Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical},...
-                    [],[],0.5+0.5*(response(2)==0))
-            end
-            
-            vbl=Screen('Flip', w);
-            keysPressed = queryInput();
-            if keysPressed(KbName(params.keys{params.vertical}))
-                response = [GetSecs-tini 1];
-            elseif keysPressed(KbName(params.keys{3-params.vertical}))
-                response = [GetSecs-tini 0];
-            end
+        vbl=Screen('Flip', w);
+        keysPressed = queryInput();
+        if keysPressed(KbName(params.keys{resp1}))
+            response = [GetSecs-tini 1];
+        elseif keysPressed(KbName(params.keys{3-resp1}))
+            response = [GetSecs-tini 0];
         end
     end
-    
     
     log.resp(num_trial,:) = response;
     if keysPressed(KbName('ESCAPE'))
@@ -259,7 +212,7 @@ while num_trial <= params.Nsets
         else
             log.correct(num_trial) = 0;
         end
-    else 
+    else
         log.correct(num_trial) = NaN;
     end
     
@@ -270,12 +223,20 @@ while num_trial <= params.Nsets
     if mod(num_trial,round(params.trialsPerBlock))>1
         if log.correct(num_trial) == 0
             a = 'incorrect'
-            alpha = alpha/0.9
+            if task<2
+                alpha = alpha/0.9
+            else
+                anglesigma = anglesigma/0.9;
+            end
             last_two_trials = [0,0]
         elseif log.correct(num_trial)==1
             if last_two_trials(2) == 1
                 a= 'two in a row'
-                alpha = alpha*0.9
+                if task<2
+                    alpha = alpha*0.9
+                else
+                    anglesigma = anglesigma*0.9;
+                end
                 last_two_trials = [0,0]
             elseif last_two_trials(2) == 0
                 last_two_trials = [0,1]
@@ -294,18 +255,19 @@ while num_trial <= params.Nsets
                 params.DetAlpha = [params.DetAlpha; mode(last_alphas(last_alphas>0))];
             elseif task==2
                 params.TiltAlpha = [params.TiltAlpha;  mode(log.Alpha(num_trial-9:num_trial))];
+                params.AngleSigma = [params.AngleSigma;  mode(log.AngleSigma(num_trial-9:num_trial))];
             end
             
             if mod(num_trial, params.trialsPerBlock)>20
                 %and it didn't change last time either, move to the next
                 %task.
-                if task==0 && params.DisAlpha(end-1)==params.DisAlpha(end)
+                if task==0 %&& params.DisAlpha(end-1)==params.DisAlpha(end)
                     last_two_trials = [0,0];
                     num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
-                elseif task==1 && params.DetAlpha(end-1)==params.DetAlpha(end)
+                elseif task==1 %&& params.DetAlpha(end-1)==params.DetAlpha(end)
                     last_two_trials = [0,0];
                     num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
-                elseif task==2 && params.TiltAlpha(end-1)==params.TiltAlpha(end)
+                elseif task==2 && params.AngleMu(end-1)==params.AngleMu(end)
                     last_two_trials = [0,0];
                     num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
                 end
