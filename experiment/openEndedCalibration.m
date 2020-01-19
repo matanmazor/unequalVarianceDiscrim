@@ -1,18 +1,20 @@
 clear all
-version = '2019-12-11';
+version = '2020-01-10';
 
-% add path to the preRNG folder, to support cryptographic time-locking of
-% hypotheses and analysis plans. Can be downloaded/cloned from
-% github.com/matanmazor/prerng
-% addpath('..\..\..\2018\preRNG\Matlab')
-
-% PsychDebugWindowConfiguration()
 
 %global variables
 global log
 global params
 global w %psychtoolbox window
 global global_clock
+global task
+global pressed
+
+% PsychDebugWindowConfiguration()
+
+%this is for KbCheck
+pressed = 0
+
 global_clock = tic();
 
 %name: name of subject. Should start with the subject number. The name of
@@ -26,22 +28,37 @@ num_lines = 1; % number of input lines
 default = {'999MaMa','0','0'}; % default filename
 savestr = inputdlg(prompt,dlg_title,num_lines,default);
 
+if strcmp(savestr{3},'1')
+    prompt = {'Discrimination Alpha: ', 'Detection Alpha: ', 'Angle Sigma: '};
+    num_lines = 1; % number of input lines
+    default = {'0.2','0.2','10'}; % default filename
+    initial_values = inputdlg(prompt,dlg_title,num_lines,default);
+end
+
 %set preferences and open screen
 Screen('Preference','SkipSyncTests', 1)
 screens=Screen('Screens');
 screenNumber=max(screens);
 doublebuffer=1;
 
-%The fMRI button box does not work well with KbCheck. I use KbQueue
-%instead here, to get precise timings and be sensitive to all presses.
-KbQueueCreate;
-KbQueueStart;
-
 [w, rect] = Screen('OpenWindow', screenNumber, [127,127,127],[], 32, doublebuffer+1);
 Screen(w,'TextSize',40)
 
 %load parameters
 params = loadPars(w, rect, savestr, 1);
+
+if params.scanning
+    params.DisAlpha = str2num(initial_values{1});
+    params.DetAlpha = str2num(initial_values{2});
+    params.AngleSigma = str2num(initial_values{3});
+end
+
+%The fMRI button box does not work well with KbCheck. I use KbQueue
+%instead here, to get precise timings and be sensitive to all presses.
+if params.scanning
+    KbQueueCreate;
+    KbQueueStart;
+end
 
 KbName('UnifyKeyNames');
 AssertOpenGL;
@@ -53,19 +70,14 @@ Priority(MaxPriority(w));
 % for drawing of smoothed points:
 Screen('BlendFunction', w, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-% In order to make sure that gratings are being presented even with very
-% low alpha levels (https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/585)
-% I enable PseudoGray. help CreatePseudoGrayLUT
-PsychImaging('PrepareConfiguration');
-PsychImaging('AddTask', 'General', 'EnablePseudoGrayOutput');
-
-
-%MM: initialize decision log
+%initialize decision log
 log.resp = zeros(params.Nsets,2);
 log.task = nan(params.Nsets,1);
 log.Alpha = nan(params.Nsets,1);
 log.correct = nan(params.Nsets,1);
 log.tilt = nan(params.Nsets,1);
+log.orientation = nan(params.Nsets,1);
+log.AngleSigma = nan(params.Nsets,1);
 log.estimates = [];
 log.events = [];
 
@@ -78,10 +90,12 @@ params.Nsets = 3000;
 % has performance level converged yet?
 converged = 0;
 
-
 num_trial = 1;
 last_two_trials = [0,0];
 alpha_vec = [];
+
+reversal_points = [];
+direction = [-1];
 
 %% Strart the trials
 while num_trial <= params.Nsets
@@ -109,6 +123,7 @@ while num_trial <= params.Nsets
         else
             error('unknown task number');
         end
+        
         anglesigma = params.AngleSigma(end);
         
         Screen('DrawTexture', w, params.orTexture);
@@ -120,56 +135,84 @@ while num_trial <= params.Nsets
         end
     end
     
-    % Start actual trials:
-    % Generate the stimulus.
-    [target,target_xy] = generate_stim(params, num_trial);
     
-    %     % Save to log.
+    % Generate the stimulus.
+    % schedule of visibility gradient
+    schedule = exp(-abs((1:round(params.display_time/params.ifi)) -...
+        round(params.display_time/params.ifi/2))/2);
+    
+    if params.vPresent(num_trial)==0 %noise trial
+        schedule = zeros(size(schedule));
+    end
+    
+    frames = {};
+    frames_xy = [];
+    
+    grating = generate_stim(params, num_trial);
+    for i = 1:length(schedule)
+        [target,target_xy] = generate_frame(grating, alpha*schedule(i));
+        frames{i} = target;
+        frames_xy = cat(3,frames_xy, target_xy);
+    end
+    
+    % Save to log.
     log.Alpha(num_trial) = params.vPresent(num_trial)*alpha;
-    log.Orientation(num_trial) = params.vOrient(num_trial)*...
+    log.orientation(num_trial) = params.vOrient(num_trial)*...
         (1-params.vVertical(num_trial));
     log.AngleSigma(num_trial) = anglesigma;
     log.xymatrix{num_trial} = target_xy;
     log.task(num_trial) = task;
     
-    response = [nan nan];
-    
-    % MM: fixation
-    Screen('DrawDots', w, [0 0]', ...
-        params.fixation_diameter_px, [255 255 255]*0.4, params.center,1);
-    vbl=Screen('Flip', w);%initial flip
-    
-    % since timing is not an issue for the calibration phase, timing is
-    % always relative to the onset of a trial and not the onset of the run.
     trial_clock = tic;
-    
-    % rest of 1 second
     while toc(trial_clock)<1
+        % Present a dot at the centre of the screen.
+        Screen('DrawDots', w, [0 0]', ...
+            params.fixation_diameter_px, [255 255 255]*0.4, params.center,1);
+        vbl=Screen('Flip', w);%initial flip
+        
         keysPressed = queryInput();
     end
     
-    % present fixation cross for 0.5 second
+    response = [nan nan];
+    
     while toc(trial_clock)<1.5
+        % Present the fixation cross.
+        %         DrawFormattedText(w, '+','center','center');
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         vbl=Screen('Flip', w);
         keysPressed = queryInput();
     end
     
-    tini = GetSecs;
+    % Present the stimulus.
+    
+    % The onset of the stimulus is encoded in the log file as '0'.
+    log.events = [log.events; 0 toc(global_clock)];
     if task == 0
         orientation = params.vOrient(num_trial)*(1-params.vVertical(num_trial));
     else
-        orientation = params.vOrient(num_trial)*anglesigma*(1-params.vVertical(num_trial));
+        orientation = params.vOrient(num_trial)*params.AngleSigma(end)*(1-params.vVertical(num_trial));
     end
-    %present stimulus
-    while (GetSecs - tini)<params.display_time
-        Screen('DrawTextures',w,target, [], [],orientation,...
-            [], alpha*params.vPresent(num_trial));
-        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-        vbl=Screen('Flip', w);
-        keysPressed = queryInput();
-    end
+    
+    tini = GetSecs;
     display_bool=0;
+    for i = 1:length(frames)
+        while toc(trial_clock)<1.5+i*params.ifi
+            Screen('DrawTextures',w,frames{i}, [], [],0,...
+                []);
+            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+            vbl=Screen('Flip', w);
+            keysPressed = queryInput();
+            resp1 = displayResps(task, response, display_bool);
+            
+            if keysPressed(KbName(params.keys{resp1}))
+                response = [GetSecs-tini 1];
+            elseif keysPressed(KbName(params.keys{3-resp1}))
+                response = [GetSecs-tini 0];
+            end
+            
+        end
+    end
+    
     while (GetSecs - tini)<params.display_time+params.time_to_respond
         
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
@@ -201,7 +244,7 @@ while num_trial <= params.Nsets
             log.correct(num_trial) = 0;
         end
     elseif task==1 && ~isnan(log.resp(num_trial,2))
-        if log.resp(num_trial,2)== sign(params.vPresent(num_trial))
+        if log.resp(num_trial,2)== params.vPresent(num_trial)
             log.correct(num_trial) = 1;
         else
             log.correct(num_trial) = 0;
@@ -222,57 +265,103 @@ while num_trial <= params.Nsets
     
     if mod(num_trial,round(params.trialsPerBlock))>1
         if log.correct(num_trial) == 0
-            a = 'incorrect'
-            if task<2
-                alpha = alpha/0.9
-            else
-                anglesigma = anglesigma/0.9;
+            if task==0
+                if direction == -1
+                    reversal_points(end+1) = alpha;
+                    direction = 1;
+                end
+                alpha = alpha/0.95;
+            elseif task==1
+                if direction == -1
+                    reversal_points(end+1) = alpha;
+                    direction = 1;
+                end
+                alpha = alpha/0.95;
+            elseif task==2
+                if direction == -1
+                    reversal_points(end+1) = anglesigma;
+                    direction = 1;
+                end
+                anglesigma = anglesigma/0.95;
             end
-            last_two_trials = [0,0]
+            last_two_trials = [0,0];
         elseif log.correct(num_trial)==1
             if last_two_trials(2) == 1
-                a= 'two in a row'
-                if task<2
-                    alpha = alpha*0.9
-                else
-                    anglesigma = anglesigma*0.9;
+                if task==0
+                    if direction == 1
+                        reversal_points(end+1) = alpha;
+                        direction = -1;
+                    end
+                    alpha = alpha*0.95;
+                elseif task==1
+                    if direction == 1
+                        reversal_points(end+1) = alpha;
+                        direction = -1;
+                    end
+                    alpha = alpha*0.95;
+                elseif task==2
+                    if direction == 1
+                        reversal_points(end+1) = anglesigma
+                        direction = -1;
+                    end
+                    anglesigma = anglesigma*0.95;
                 end
-                last_two_trials = [0,0]
+                last_two_trials = [0,0];
             elseif last_two_trials(2) == 0
-                last_two_trials = [0,1]
+                last_two_trials = [0,1];
             end
         end
         
-        %if alpha didn't change this time, and we're over 80 trials
-        %into the calibration phase
-        if mod(num_trial,10)==0
-            
-            if task==0
-                params.DisAlpha = [params.DisAlpha;  mode(log.Alpha(num_trial-9:num_trial))];
-            elseif task==1
-                %don't take into account target absence trials.
-                last_alphas = log.Alpha(num_trial-9:num_trial);
-                params.DetAlpha = [params.DetAlpha; mode(last_alphas(last_alphas>0))];
-            elseif task==2
-                params.TiltAlpha = [params.TiltAlpha;  mode(log.Alpha(num_trial-9:num_trial))];
-                params.AngleSigma = [params.AngleSigma;  mode(log.AngleSigma(num_trial-9:num_trial))];
+        if length(reversal_points)>12
+            if task == 0
+                params.DisAlpha(end+1) = mean(reversal_points(end-3:end));
+            elseif task == 1
+                params.DetAlpha(end+1) = mean(reversal_points(end-3:end));
+            elseif task == 2
+                params.AngleSigma(end+1) = mean(reversal_points(end-3:end));
             end
-            
-            if mod(num_trial, params.trialsPerBlock)>20
-                %and it didn't change last time either, move to the next
-                %task.
-                if task==0 && params.DisAlpha(end-1)==params.DisAlpha(end)
-                    last_two_trials = [0,0];
-                    num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
-                elseif task==1 && params.DetAlpha(end-1)==params.DetAlpha(end)
-                    last_two_trials = [0,0];
-                    num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
-                elseif task==2 && params.AngleSigma(end-1)==params.AngleSigma(end)
-                    last_two_trials = [0,0];
-                    num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
-                end
-            end
+            last_two_trials = [0,0];
+            num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
+            reversal_points = [];
+            direction = [1];
         end
+%         if mod(num_trial,8)==0
+%             if task==0
+%                 params.DisAlpha = [params.DisAlpha;  mode(log.Alpha(num_trial-7:num_trial))];
+%             elseif task==1
+%                 %don't take into account target absence trials.
+%                 last_alphas = log.Alpha(num_trial-7:num_trial);
+%                 params.DetAlpha = [params.DetAlpha; mode(last_alphas(last_alphas>0))];
+%                 params.DisAlpha = min(params.DetAlpha(end)*2,0.2);
+%             elseif task==2
+%                 params.TiltAlpha = [params.TiltAlpha;  mode(log.Alpha(num_trial-7:num_trial))];
+%                 params.AngleSigma = [params.AngleSigma;  mode(log.AngleSigma(num_trial-7:num_trial))];
+%             end
+%             
+%             if mod(num_trial, params.trialsPerBlock)>80 || params.scanning
+%                 %and it didn't change last time either, move to the next
+%                 %task.
+%                 if task==0
+%                     if ismember(params.DisAlpha(end),dis_alpha_bucket)
+%                         last_two_trials = [0,0];
+%                         num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
+%                     end
+%                     dis_alpha_bucket(end+1) = params.DisAlpha(end);
+%                 elseif task==1
+%                     if ismember(params.DetAlpha(end),det_alpha_bucket)
+%                         last_two_trials = [0,0];
+%                         num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
+%                     end
+%                     det_alpha_bucket(end+1) = params.DetAlpha(end);
+%                 elseif task==2
+%                     if ismember(params.AngleSigma(end),angle_sigma_bucket)
+%                         last_two_trials = [0,0];
+%                         num_trial = ceil(num_trial/params.trialsPerBlock)*params.trialsPerBlock;
+%                     end
+%                     angle_sigma_bucket(end+1) = params.AngleSigma(end);
+%                 end
+%             end
+%         end
     end
     num_trial = num_trial+1;
 end
@@ -293,3 +382,14 @@ end
 Priority(0);
 ShowCursor
 Screen('CloseAll');
+
+%% write report
+fileID = fopen(fullfile('data',[params.subj,'_report.txt']),'w');
+fprintf(fileID,'%s%s\r\n','Report for ',params.subj);
+fprintf(fileID, '%s\r\n', date);
+fprintf(fileID,'%s\r\n','===Calibration===');
+fprintf(fileID,'%s%d\r\n','Mapping: ',params.conf_mapping);
+fprintf(fileID,'%s%3f\r\n','Discrimination Alpha: ',params.DisAlpha(end));
+fprintf(fileID,'%s%3f\r\n','Detection Alpha: ',params.DetAlpha(end));
+fprintf(fileID,'%s%3f\r\n','Angle Sigma: ',params.AngleSigma(end));
+fclose(fileID)

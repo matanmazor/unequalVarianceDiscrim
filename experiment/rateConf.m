@@ -6,11 +6,11 @@ global params
 global w
 
 if params.conf_mapping==1 % big circle = confident
-    increase_key =KbName('UpArrow');% '6^'
-    decrease_key = KbName('DownArrow');%'7&'
+    increase_key =KbName('6^');% '6^'
+    decrease_key = KbName('7&');%'7&'
 elseif params.conf_mapping==2 % small circle = confident
-    increase_key =KbName('DownArrow');
-    decrease_key = KbName('UpArrow');
+    increase_key =KbName('7&');
+    decrease_key = KbName('6^');
 end
 
 timer = tic();

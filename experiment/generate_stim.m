@@ -1,4 +1,4 @@
-function [target, target_xy] = generate_stim(params, num_trial)
+function [image] = generate_stim(params, num_trial)
 %{ 
  GENERATE_STIM takes as input the parameter structure and the trial number
  and returns the target texture.
@@ -9,14 +9,23 @@ function [target, target_xy] = generate_stim(params, num_trial)
  Matan Mazor 2019
 %}
 
-global w
+global task
+global log
+
+if task  ==0
+    theta = params.vOrient(num_trial);
+else
+    theta = params.vOrient(num_trial)*(1-params.vVertical(num_trial))*...
+        params.AngleSigma(end);
+end
+log.orientation(num_trial) = theta;
 
 % make target patch
-[target_xy,mask]  =    makeGrating(params.stimulus_width_px,[],1,...
+[target_xy, mask]  = makeGrating(params.stimulus_width_px,[],1,...
     params.cycle_length_px,'pixels per period','vertical',...
-    params.vPhase(num_trial));
+    params.vPhase(num_trial), theta);
 
-grating = repmat(255*Scale(target_xy),1,1,3);
-target = Screen('MakeTexture',w,cat(3, grating, 255*Scale(params.circleFilter)));
+image = 255*Scale(target_xy);
 
+end
 

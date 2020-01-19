@@ -1,10 +1,10 @@
 %{
   fMRI experiment, run in the Wellcome Centre for Human Neuroimaging.
-  Matan Mazor, 2019
+  Matan Mazor, 2020
 %}
 
 clear all
-version = '2018-08-14';
+version = '2020-01-10';
 %{
     add path to the preRNG folder, to support cryptographic time-locking of
     hypotheses and analysis plans. Can be downloaded/cloned from
@@ -19,6 +19,11 @@ global log
 global params
 global global_clock
 global w %psychtoolbox window
+global task
+global pressed
+
+%this is for KbCheck
+pressed = 0
 
 %name: name of subject. Should start with the subject number. The name of
 %the subject should be included in the data/subjects.mat file.
@@ -26,6 +31,7 @@ global w %psychtoolbox window
 %for tilt practice.
 %scanning: 0 for no, 1 for yes. this parameter only affects the sensitivity
 %of the inter-run staircasing procedure.
+
 prompt = {'Name: ', 'Practice: ', 'Scanning: '};
 dlg_title = 'Filename'; % title of the input dialog box
 num_lines = 1; % number of input lines
@@ -37,23 +43,19 @@ Screen('Preference','SkipSyncTests', 1)
 screens=Screen('Screens');
 screenNumber=max(screens);
 doublebuffer=1;
-% In order to make sure that gratings are being presented even with very
-% low alpha levels (https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/585)
-% I enable PseudoGray. help CreatePseudoGrayLUT
-PsychImaging('PrepareConfiguration');
-PsychImaging('AddTask', 'General', 'EnablePseudoGrayOutput');
-
-
-%The fMRI button box does not work well with KbCheck. I use KbQueue
-%instead here, to get precise timings and be sensitive to all presses.
-KbQueueCreate;
-KbQueueStart;
 
 % Open window.
 [w, rect] = Screen('OpenWindow', screenNumber, [127,127,127],[], 32, doublebuffer+1);
 Screen(w,'TextSize',40)
 %Load parameters
 params = loadPars(w, rect, savestr, 0);
+
+%The fMRI button box does not work well with KbCheck. I use KbQueue
+%instead here, to get precise timings and be sensitive to all presses.
+if params.scanning
+    KbQueueCreate;
+    KbQueueStart;
+end
 
 KbName('UnifyKeyNames');
 AssertOpenGL;
@@ -71,6 +73,7 @@ log.resp = zeros(params.Nsets,2);
 log.task = nan(params.Nsets,1);
 log.Alpha = nan(params.Nsets,1);
 log.correct = nan(params.Nsets,1);
+log.orientation = nan(params.Nsets,1);
 log.events = [];
 
 
@@ -84,7 +87,7 @@ slicesperVolume = 48;
 
 %initialize
 num_five = 0;
-while num_five<excludeVolumes*slicesperVolume && params.scanning
+while num_five<=excludeVolumes && params.scanning
     Screen('DrawTexture', w, params.waitTexture);
     vbl=Screen('Flip', w);
     [ ~, firstPress]= KbQueueCheck;
@@ -110,18 +113,38 @@ DisableKeysForKbCheck(KbName('5%'));
 for num_trial = 1:params.Nsets
     
     % Restrat Queue
-    KbQueueStart;
+    if params.scanning
+        KbQueueStart;
+    end
     
+    %1. Set task to 0 (discrimination), 1 (detection) or 2 (tilt)
+        task = params.vTask(ceil(num_trial/params.trialsPerBlock));
+        
     % At the beginning of each experimental block:
     if mod(num_trial,round(params.trialsPerBlock))==1
         
-        %1. Save data to file
+        if task ==0
+            Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.clockwise}, 45);
+            Screen('DrawTexture', w, params.vertTexture, [], params.positions{3-params.clockwise}, -45)
+            alpha = params.DisAlpha(end);
+        elseif task==1
+            Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes})
+            Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes})
+            alpha = params.DetAlpha(end);
+        elseif task ==2
+            Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical})
+            Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical})
+            alpha = params.TiltAlpha(end);
+        else
+            error('unknown task number');
+        end
+        
+        vbl=Screen('Flip', w);
+
+        %2. Save data to file
         if ~params.practice
             save(fullfile('data', ['temp_',params.filename]),'params','log');
         end
-        
-        %2. Set task to 0 (discrimination), 1 (detection) or 2 (tilt)
-        task = params.vTask(ceil(num_trial/params.trialsPerBlock));
         
         %3. Leave the instructions on the screen for 5 seconds.
         if num_trial==1
@@ -131,53 +154,45 @@ for num_trial = 1:params.Nsets
         end
         
         %4. Present the instructions on the screen.
-        
         while toc(global_clock)<remove_instruction_time
             
-            if task ==0
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.clockwise}, 45);
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{3-params.clockwise}, -45)
-                alpha = params.DisAlpha(end);
-            elseif task==1
-                Screen('DrawTexture', w, params.yesTexture, [], params.positions{params.yes})
-                Screen('DrawTexture', w, params.noTexture, [], params.positions{3-params.yes})
-                alpha = params.DetAlpha(end);
-            elseif task ==2
-                Screen('DrawTexture', w, params.vertTexture, [], params.positions{params.vertical})
-                Screen('DrawTexture', w, params.xTexture, [], params.positions{3-params.vertical})
-                alpha = params.TiltAlpha(end);
-            else
-                error('unknown task number');
-            end
-            
-            % because DrawText is not working :-(
-            % https://github.com/Psychtoolbox-3/Psychtoolbox-3/issues/579
-            Screen('DrawTexture', w, params.orTexture);
-            %             DrawFormattedText(w, '?',params.positions{2}(3)+100,'center');
-            
-            vbl=Screen('Flip', w);
             keysPressed = queryInput();
         end
     end
     
-    % Start actual trials:
-    % Generate the stimulus.
-    [target,target_xy] = generate_stim(params, num_trial);
+    % schedule of visibility gradient
+    schedule = exp(-abs((1:round(params.display_time/params.ifi)) -...
+        round(params.display_time/params.ifi/2))/2);
+    
+    if params.vPresent(num_trial)==0 %noise trial
+        schedule = zeros(size(schedule));
+    end
+    
+    frames_xy = [];
+    frames ={};
+    %create the grating
+    grating = generate_stim(params, num_trial);
+    
+    %create the frames
+    for i = 1:length(schedule)
+        [target,target_xy] = generate_frame(grating, alpha*schedule(i));
+        frames_xy = cat(3,frames_xy, target_xy);
+        frames{i} = target;
+    end
+    
     
     % Save to log.
     log.Alpha(num_trial) = params.vPresent(num_trial)*alpha;
-    log.Orientation(num_trial) = params.vOrient(num_trial)*...
+    log.orientation(num_trial) = params.vOrient(num_trial)*...
         (1-params.vVertical(num_trial));
-    log.xymatrix{num_trial} = target_xy;
+    log.xymatrix{num_trial} = frames_xy;
     log.task(num_trial) = task;
-    
     
     while toc(global_clock)<params.onsets(num_trial)-0.5
         % Present a dot at the centre of the screen.
         Screen('DrawDots', w, [0 0]', ...
             params.fixation_diameter_px, [255 255 255]*0.4, params.center,1);
         vbl=Screen('Flip', w);%initial flip
-        
         keysPressed = queryInput();
     end
     
@@ -192,7 +207,7 @@ for num_trial = 1:params.Nsets
     end
     
     % Present the stimulus.
-    tini = GetSecs;
+    
     % The onset of the stimulus is encoded in the log file as '0'.
     log.events = [log.events; 0 toc(global_clock)];
     if task == 0
@@ -201,23 +216,35 @@ for num_trial = 1:params.Nsets
         orientation = params.vOrient(num_trial)*params.AngleSigma(end)*(1-params.vVertical(num_trial));
     end
     
-    while (GetSecs - tini)<params.display_time
-        Screen('DrawTextures',w,target, [], [],orientation,...
-            [], alpha*params.vPresent(num_trial));
-        Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
-        vbl=Screen('Flip', w);
-        keysPressed = queryInput();
+    tini = GetSecs;
+    display_bool=0;
+    
+    %present the frames one by one.
+    for i = 1:length(frames)
+        while toc(global_clock)<params.onsets(num_trial)+i*params.ifi
+            Screen('DrawTextures',w,frames{i}, [], [],0,...
+                []);
+            Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
+            vbl=Screen('Flip', w);
+            keysPressed = queryInput();
+            resp1 = displayResps(task, response, display_bool);
+            if keysPressed(KbName(params.keys{resp1}))
+                response = [GetSecs-tini 1];
+            elseif keysPressed(KbName(params.keys{3-resp1}))
+                response = [GetSecs-tini 0];
+            end
+        end
     end
     
     %% Wait for response
     
-    display_bool=0;
-    while (GetSecs - tini)<params.display_time+params.time_to_respond
+    while toc(global_clock)<params.onsets(num_trial)+params.display_time+params.time_to_respond
         
         Screen('DrawTexture', w, params.crossTexture,[],params.cross_position);
         resp1 = displayResps(task, response, display_bool);
         
-        if (GetSecs - tini)>=params.display_time+0.4
+        %only display the response signs after 0.4 seconds
+        if toc(global_clock)<params.onsets(num_trial)+params.display_time+0.4
             display_bool = 1;
         end
         
@@ -245,7 +272,7 @@ for num_trial = 1:params.Nsets
             log.correct(num_trial) = 0;
         end
     elseif task==1 && ~isnan(log.resp(num_trial,2))
-        if log.resp(num_trial,2)== sign(params.vPresent(num_trial))
+        if log.resp(num_trial,2)== params.vPresent(num_trial)
             log.correct(num_trial) = 1;
         else
             log.correct(num_trial) = 0;
@@ -290,7 +317,6 @@ if ~params.scanning
 end
 
 %% write to log
-
 if ~params.practice
     log.date = date;
     log.version = version;
@@ -300,3 +326,20 @@ if ~params.practice
     end
 end
 
+%% write to report
+try
+    fileID = fopen(fullfile('data',[params.subj,'_report.txt']),'a');
+    fprintf(fileID,'%s%s%s\r\n','===Run ',num2str(params.num_session),...
+        '===');
+    fprintf(fileID,'%s%3f\r\n','Discrimination Alpha: ',params.DisAlpha(end));
+    fprintf(fileID,'%s%2f\r\n','Discrimination accuracy: ',nanmean(log.correct(log.task==0)));
+    fprintf(fileID,'%s%2f%s\r\n','Answered ''clockwise'' on ',...
+        nanmean(log.resp(log.task==0)), 'of the trials');
+    fprintf(fileID,'%s%3f\r\n','Detection Alpha: ',params.DetAlpha(end));
+    fprintf(fileID,'%s%2f\r\n','Detection accuracy: ',nanmean(log.correct(log.task==1)));
+    fprintf(fileID,'%s%3f\r\n','Angle Sigma: ',params.AngleSigma(end));
+    fprintf(fileID,'%s%2f\r\n','Tilt recognition accuracy: ',nanmean(log.correct(log.task==2)));
+    fclose(fileID)
+catch
+    error('close the report file!');
+end

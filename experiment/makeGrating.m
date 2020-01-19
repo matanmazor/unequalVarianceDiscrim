@@ -1,4 +1,4 @@
-function [grating gaussianMask] = makeGrating(width,height,contrast,gratingPeriod,gratingPeriodUnits,orientation, Gphase)
+function [grating gaussianMask] = makeGrating(width,height,contrast,gratingPeriod,gratingPeriodUnits,orientation, Gphase, theta)
 
 % Adopted from PTB's GratingDemo.m
 % 
@@ -39,6 +39,10 @@ function [grating gaussianMask] = makeGrating(width,height,contrast,gratingPerio
 %
 %       To display gratings rotated between vertical and horizontal
 %       orientation, use the Screen('DrawTexture') rotation functionality
+%
+% Gphase = phase of grating
+% theta = by how many degrees should the gabor be rotated (relative to the
+% orientation)
 
 
 %% set parameter values if not specified
@@ -121,6 +125,13 @@ heightArray = [1:height] - median(1:height)+ Gphase*pixelsPerPeriod;
 % the grid, x = x(x0, y0) corresponds to the x-coordinate of element "i"
 % and y = y(x0, y0) corresponds to the y-coordinate of element "i"
 [x y] = meshgrid(widthArray, heightArray);
+
+XY = [x(:) y(:)];                                     % Create Matrix Of Vectors
+R=[cosd(-theta) -sind(-theta); sind(-theta) cosd(-theta)]; %CREATE THE MATRIX
+rotXY=XY*R'; %MULTIPLY VECTORS BY THE ROT MATRIX 
+x = reshape(rotXY(:,1), size(x,1), []);
+y = reshape(rotXY(:,2), size(y,1), []);
+
 
 % Creates a sinusoidal grating, where the period of the sinusoid is 
 % approximately equal to "pixelsPerGratingPeriod" pixels.
