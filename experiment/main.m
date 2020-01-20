@@ -138,7 +138,7 @@ for num_trial = 1:params.Nsets
         else
             error('unknown task number');
         end
-        
+        Screen('DrawTexture', w, params.orTexture);
         vbl=Screen('Flip', w);
 
         %2. Save data to file

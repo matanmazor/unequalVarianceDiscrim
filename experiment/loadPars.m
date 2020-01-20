@@ -10,6 +10,12 @@ params.subj = savestr{1};
 params.practice = str2double(savestr{2});
 params.scanning = str2double(savestr{3});
 
+if calibration==2
+    params.doDiscrimination= str2double(savestr{4});
+    params.doDetection = str2double(savestr{5});
+    params.doTiltRecognition = str2double(savestr{6});
+end
+
 % load the subject list from the data folder.
 load(fullfile('data','subjects.mat'));
 if ismember(params.subj, subjects.keys)
@@ -21,22 +27,42 @@ else
 end
 
 % A while-loop to start next session in line.
-if ~params.practice && ~calibration
+if ~params.practice && calibration~=1
     num_session=0;
     stopper=0;
     while stopper==0
         num_session = num_session + 1;
+        aux_filename_calibration = strjoin({params.subj,...
+            ['calibration',num2str(num_session)],'.mat'},'_');
         aux_filename = strjoin({params.subj,...
             ['session',num2str(num_session)],'.mat'},'_');
         stopper = isempty(dir(fullfile('data',aux_filename)));
         if ~stopper
             % if previous run exists, load log and parameters as
             % 'old_params'
-            old_params = load(fullfile('data',aux_filename));
+            %first try to see if there is a calibration session following
+            %this run.
+            if isfile(fullfile('data',aux_filename_calibration))
+                old_params = load(fullfile('data',aux_filename_calibration));
+                params.fromCalibration = 1;
+            else
+                %if not, just load the run.
+                old_params = load(fullfile('data',aux_filename));
+                params.fromCalibration = 0;
+            end
         end
     end
     params.num_session = num_session;
-    params.filename = aux_filename;
+    if calibration==0 %this is just a session
+        params.filename = aux_filename;
+        params.num_session = num_session;
+    elseif calibration ==2 %this is a calibration fixing session
+        %the reason that we can't use aux_filename_calibration is that its
+        %using the next session number.
+        params.filename = strjoin({params.subj,...
+            ['calibration',num2str(num_session-1)],'.mat'},'_'); 
+        params.num_session = num_session-1;
+    end
 else
     params.num_session = 0;
     num_session=0;
@@ -61,7 +87,7 @@ if ~params.practice
 end
 
 params.waitframes = 1;
-if params.practice || calibration
+if params.practice || calibration==1
     
     %Alpha is the parameter that controls the prevalence of signal pixels
     %in the stimulus. It is sometimes referred to here as 'transparency',
@@ -107,11 +133,13 @@ else
     %     2 ==> Tilt (unequal variance)
     
     % if discrimination performance was too low, increase alpha
-    if nanmean(old_params.log.correct(find(old_params.log.task==0)))<=lower_bound
+    if nanmean(old_params.log.correct(find(old_params.log.task==0)))<=lower_bound && ...
+            ~params.fromCalibration
         params.DisAlpha = old_params.params.DisAlpha(end)/0.95;
         
         % if discrimination performance was too high, decrease alpha
-    elseif nanmean(old_params.log.correct(find(old_params.log.task==0)))>=upper_bound
+    elseif nanmean(old_params.log.correct(find(old_params.log.task==0)))>=upper_bound && ...
+            ~params.fromCalibration
         params.DisAlpha = old_params.params.DisAlpha(end)*0.95;
         
         % else, don't change alpha
@@ -120,11 +148,13 @@ else
     end
     
     % if detection performance was too low, increase alpha
-    if nanmean(old_params.log.correct(find(old_params.log.task==1)))<=lower_bound
+    if nanmean(old_params.log.correct(find(old_params.log.task==1)))<=lower_bound && ...
+            ~params.fromCalibration
         params.DetAlpha = old_params.params.DetAlpha(end)/0.95;
         
         % if detection performance was too high, decrease alpha
-    elseif nanmean(old_params.log.correct(find(old_params.log.task==1)))>=upper_bound
+    elseif nanmean(old_params.log.correct(find(old_params.log.task==1)))>=upper_bound && ...
+            ~params.fromCalibration
         params.DetAlpha = old_params.params.DetAlpha(end)*0.95;
         
         % else, don't change alpha
@@ -133,10 +163,12 @@ else
     end
     
     % if tilt performance was too low, increase angle sigma
-    if nanmean(old_params.log.correct(find(old_params.log.task==2)))<=lower_bound
+    if nanmean(old_params.log.correct(find(old_params.log.task==2)))<=lower_bound && ...
+            ~params.fromCalibration
         params.AngleSigma = old_params.params.AngleSigma(end)/0.95;
         % if detection performance was too high, decrease angle sigma
-    elseif nanmean(old_params.log.correct(find(old_params.log.task==2)))>=upper_bound
+    elseif nanmean(old_params.log.correct(find(old_params.log.task==2)))>=upper_bound && ...
+            ~params.fromCalibration
         params.AngleSigma = old_params.params.AngleSigma(end)*0.95;
         % else, don't change angle sigma
     else
