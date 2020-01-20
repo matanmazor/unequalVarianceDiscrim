@@ -319,7 +319,7 @@ while num_trial <= params.Nsets
             end
         end
         
-        if length(reversal_points)>5
+        if length(reversal_points)>12
             if task == 0
                 params.DisAlpha(end+1) = mean(reversal_points(end-3:end));
             elseif task == 1
