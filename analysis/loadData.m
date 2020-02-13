@@ -1,14 +1,14 @@
-function data_struct = loadData(varargin)
+function data_struct = loadData(subj_id)
 % load data from all participants and arrange in a dictionary
 
 data_struct = containers.Map;
 
 % load subject list
 load(fullfile('..','experiment','data','subjects.mat'));
-if length(varargin)==0
+if (~exist('subj_id','var'))
     subj_list = subjects.keys;
 else
-    subj_list = {varargin{1}};
+    subj_list = {subj_id};
 end
 
 %load data
