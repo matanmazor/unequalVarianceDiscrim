@@ -10,6 +10,14 @@ global global_clock
 global task
 global pressed
 
+%{
+    add path to the preRNG folder, to support cryptographic time-locking of
+    hypotheses and analysis plans. Can be downloaded/cloned from
+    github.com/matanmazor/prerng
+%}
+
+addpath('..\..\..\complete\preRNG\Matlab')
+
 % PsychDebugWindowConfiguration()
 
 %this is for KbCheck
@@ -51,6 +59,9 @@ if params.scanning
     params.DisAlpha = str2num(initial_values{1});
     params.DetAlpha = str2num(initial_values{2});
     params.AngleSigma = str2num(initial_values{3});
+    params.step_size = sqrt(0.95);
+else
+    params.step_size = 0.95;
 end
 
 %The fMRI button box does not work well with KbCheck. I use KbQueue
@@ -270,19 +281,19 @@ while num_trial <= params.Nsets
                     reversal_points(end+1) = alpha;
                     direction = 1;
                 end
-                alpha = alpha/0.95;
+                alpha = alpha/params.step_size;
             elseif task==1
                 if direction == -1
                     reversal_points(end+1) = alpha;
                     direction = 1;
                 end
-                alpha = alpha/0.95;
+                alpha = alpha/params.step_size;
             elseif task==2
                 if direction == -1
                     reversal_points(end+1) = anglesigma;
                     direction = 1;
                 end
-                anglesigma = anglesigma/0.95;
+                anglesigma = anglesigma/params.step_size;
             end
             last_two_trials = [0,0];
         elseif log.correct(num_trial)==1
@@ -292,19 +303,19 @@ while num_trial <= params.Nsets
                         reversal_points(end+1) = alpha;
                         direction = -1;
                     end
-                    alpha = alpha*0.95;
+                    alpha = alpha*params.step_size;
                 elseif task==1
                     if direction == 1
                         reversal_points(end+1) = alpha;
                         direction = -1;
                     end
-                    alpha = alpha*0.95;
+                    alpha = alpha*params.step_size;
                 elseif task==2
                     if direction == 1
                         reversal_points(end+1) = anglesigma
                         direction = -1;
                     end
-                    anglesigma = anglesigma*0.95;
+                    anglesigma = anglesigma*params.step_size;
                 end
                 last_two_trials = [0,0];
             elseif last_two_trials(2) == 0
