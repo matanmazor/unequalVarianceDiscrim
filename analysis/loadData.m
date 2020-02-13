@@ -1,16 +1,20 @@
-function data_struct = loadData()
+function data_struct = loadData(varargin)
 % load data from all participants and arrange in a dictionary
 
 data_struct = containers.Map;
 
 % load subject list
 load(fullfile('..','experiment','data','subjects.mat'));
-subj_list = subjects.keys;
+if length(varargin)==0
+    subj_list = subjects.keys;
+else
+    subj_list = {varargin{1}};
+end
 
 %load data
 for i=1:length(subj_list) %don't analyze dummy subject 999MaMa
     subj = subj_list{i};
-    if str2num(subj(1:2))<900
+    if str2num(subj(1:2))<60
         subj_files = dir(fullfile('..','experiment','data',[subj,'_session*.mat']));
         if ~isempty(subj_files)
             subject_data.DisAlpha = [];
@@ -161,7 +165,7 @@ for i=1:length(subj_list) %don't analyze dummy subject 999MaMa
                 
                 V_conf = hist(log.confidence(log.task==2 & log.resp(:,2)==1),1:6);
                 T_conf = hist(log.confidence(log.task==2 & log.resp(:,2)==0),1:6);
-
+                
                 if sum(isnan(subject_data.DisCorrect(end-25:end)))<6 && ...
                         nanmean(subject_data.DisCorrect(end-25:end))>0.6 && ...
                         abs(nanmean(subject_data.DisResp(end-25:end))-0.5)<0.3 && ...
@@ -186,6 +190,22 @@ for i=1:length(subj_list) %don't analyze dummy subject 999MaMa
                         max(T_conf)/sum(T_conf)<0.9 && max(V_conf)/sum(V_conf)<0.9
                     subject_data.TiltInclude = [subject_data.TiltInclude; 0; ones(25,1)];
                 else
+                    if nanmean(subject_data.TiltCorrect(end-25:end))<=0.6
+                        sprintf('reason for excluding run %d from %s: accuracy',j, subj)
+                    end
+                    
+                    if abs(nanmean(subject_data.TiltResp(end-25:end))-0.5)>=0.3
+                        sprintf('reason for excluding run %d from %s: bias',j, subj)
+                    end
+                    
+                    if max(T_conf)/sum(T_conf)>=0.9
+                        sprintf('reason for excluding run %d from %s: confidence in tilted',j, subj)
+                    end
+                    
+                    if max(V_conf)/sum(V_conf)>=0.9
+                        sprintf('reason for excluding run %d from %s: confidence in vertical',j, subj)
+                    end
+                    
                     subject_data.TiltInclude = [subject_data.TiltInclude; zeros(26,1)];
                 end
                 
@@ -199,7 +219,28 @@ for i=1:length(subj_list) %don't analyze dummy subject 999MaMa
                 (subject_data.TiltCorrect(find(~isnan(subject_data.TiltConf)))-0.5)'...
                 *subject_data.TiltConf(find(~isnan(subject_data.TiltConf))))/100;
             
+            
+            if sum(subject_data.DetInclude)>=75 && ...
+                    sum(subject_data.DisInclude)>=75 && ...
+                    sum(subject_data.TiltInclude)>=75
+                subject_data.include = 1;
+            else
+                subject_data.include=0;
+                if sum(subject_data.DetInclude)<75
+                    sprintf('reason for excluding %s: detection',subj)
+                end
+                
+                if sum(subject_data.DisInclude)<75
+                    sprintf('reason for excluding %s: discrimination',subj)
+                end
+                
+                if sum(subject_data.TiltInclude)<75
+                    sprintf('reason for excluding %s: tilt',subj)
+                end
+            end
+            
             data_struct(subj)=subject_data;
+            
         end
     end
 end
