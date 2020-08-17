@@ -1,11 +1,9 @@
-function [] = makeSubjectsFile()
-
+clear;
 subjects = containers.Map;
 
-session_files = dir(fullfile('..','experiment','data','*session1_.mat'));
+session_files = dir(fullfile('..','experiment','data','*session1_lite.mat'));
 
 for i=1:length(session_files)
-    
     cur_file = load(fullfile(session_files(i).folder, session_files(i).name));
     % make some sanity checks
     if isfield(cur_file.log, 'orientation')
@@ -16,5 +14,4 @@ for i=1:length(session_files)
 end
 
 save(fullfile('..','experiment','data','subjects.mat'),'subjects');
-end
 
